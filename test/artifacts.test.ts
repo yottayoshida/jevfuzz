@@ -26,7 +26,7 @@ test('saveArtifacts creates private complete reports and human text', async () =
     assert.match(renderText(report), /baseline stable/);
     const display = structuredClone(report);
     display.run.modelChanged = true; display.run.requestedModels = ['jev-requested']; display.run.observedModels = ['jev-a', 'jev-b'];
-    display.summary = { ...display.summary, pass: 2, warn: 3, fail: 4, inconclusive: 5, logicalRequests: 6, httpAttempts: 9, usage: { inputTokens: 7, outputTokens: 8 } };
+    display.summary = { ...display.summary, pass: 2, warn: 3, fail: 4, inconclusive: 5, logicalRequests: 6, httpAttempts: 9, httpRetries: 3, usage: { inputTokens: 7, outputTokens: 8 } };
     const baseline = display.cases[0]!.baseline.decision!;
     baseline.stable = false; baseline.agreementRatio = 0.5; baseline.runs = 2;
     const text = renderText(display);
@@ -65,7 +65,7 @@ test('importTrace extracts only validated Jev requests', async () => {
   const root = await directory();
   try {
     const trace = join(root, 'trace.jsonl');
-    await writeFile(trace, `${JSON.stringify({ version: 1, source: 'jev-intent-review', request, response: { secret: 'historical' } })}\n`);
+    await writeFile(trace, `${JSON.stringify({ version: 1, source: 'jev-intent-review', timestamp: '2026-09-22T00:00:00.000Z', request, response: { secret: 'historical' } })}\n`);
     const files = await importTrace(trace, join(root, 'imports'));
     assert.equal(files.length, 1);
     const imported = await readFile(files[0]!, 'utf8');
@@ -74,6 +74,47 @@ test('importTrace extracts only validated Jev requests', async () => {
     const parsed = await loadConfig(files[0]!);
     const rerun = await run(parsed, new FakeProvider(), { seed: 3, confirmRuns: 2, concurrency: 1, maxRequests: 100 });
     assert.equal(rerun.summary.pass > 0, true);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('trace import rejects missing timestamp or response before writing', async () => {
+  const root = await directory();
+  try {
+    for (const extra of [{ response: {} }, { timestamp: 'bad', response: {} }, { timestamp: '2026-09-22T00:00:00.000Z' }]) {
+      const trace = join(root, 'invalid.jsonl');
+      await writeFile(trace, JSON.stringify({ version: 1, source: 'jev-intent-review', request, ...extra }));
+      await assert.rejects(importTrace(trace, join(root, 'imports')), /trace line/);
+      await assert.rejects(lstat(join(root, 'imports')));
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('human confirmed failure identifies decisions, strategy and the actual replay file', async () => {
+  const root = await directory();
+  try {
+    const provider = new FakeProvider(r => {
+      const answers = Object.fromEntries(Object.entries(r.questions).map(([id, q]) => {
+        const choices = Object.keys(q.criteria!);
+        return [id, { type: 'choice', choice: choices[0], confidence: 1, probabilities: Object.fromEntries(choices.map((v, i) => [v, i === 0 ? 1 : 0])) }];
+      }));
+      return { model: 'jev-test', answers, usage: { input_tokens: 1, output_tokens: 1 } } as any;
+    });
+    const report = await run(config, provider, { seed: 42, concurrency: 1 });
+    assert.ok(report.summary.fail > 0);
+    const saved = await saveArtifacts(report, root);
+    const text = await readFile(join(saved, 'report.txt'), 'utf8');
+    assert.match(text, /choice_criteria_order \/ reverse/);
+    assert.match(text, /baseline 2\/2 yes/);
+    assert.match(text, /mutated 3\/3 no/);
+    assert.ok(text.includes(join(saved, 'failures', 'F001.json')));
+    assert.match(text, /jevfuzz replay/);
+    assert.doesNotMatch(text, /--provider cloudflare/);
+    assert.match(renderText(report, { directory: saved, replayProvider: 'cloudflare' }), /jevfuzz replay '[^\n]+' --provider cloudflare/);
+    assert.equal((await loadFailure(join(saved, 'failures', 'F001.json'))).comparison.verdict, 'FAIL');
+    const withoutPayloads = await saveArtifacts({ ...report, run: { ...report.run, id: `${report.run.id}-hash` } }, root, false);
+    const privateText = await readFile(join(withoutPayloads, 'report.txt'), 'utf8');
+    assert.match(privateText, /replay unavailable/);
+    assert.doesNotMatch(privateText, /jevfuzz replay|failures\/F001/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -104,5 +145,13 @@ test('replay uses exact artifact requests, confirms position-sensitive failure, 
     const wrongMap = structuredClone(artifact); wrongMap.idMap = { unknown: 'decision' };
     await writeFile(join(root, 'wrong-map.json'), JSON.stringify(wrongMap));
     await assert.rejects(loadFailure(join(root, 'wrong-map.json')), /question map/i);
+    for (const id of ['__proto__', 'constructor']) {
+      const reserved = structuredClone(artifact);
+      reserved.questionId = id; reserved.idMap = {};
+      reserved.baselineRequest.questions = Object.fromEntries([[id, request.questions.decision!]]);
+      reserved.mutatedRequest.questions = structuredClone(reserved.baselineRequest.questions);
+      await writeFile(file, JSON.stringify(reserved));
+      assert.equal((await loadFailure(file)).questionId, id);
+    }
   } finally { await rm(root, { recursive: true, force: true }); }
 });

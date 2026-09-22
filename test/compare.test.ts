@@ -75,20 +75,33 @@ test('noul detects threshold flips and soft shifts at exact thresholds', () => {
   const confirmed = compare(baseline, [noul(0.45), noul(0.45), noul(0.45)], undefined, true);
   assert.equal(confirmed.verdict, 'FAIL');
   const directionMismatch = compare(baseline, [noul(0.45), noul(0.45), noul(0.8)], undefined, true);
-  assert.equal(directionMismatch.verdict, 'WARN');
-  assert.equal(directionMismatch.reason, 'WARN_FLAKY_MUTATION');
+  assert.equal(directionMismatch.verdict, 'FAIL');
+  assert.equal(directionMismatch.reproduced, 2);
   const soft = compare([noul(0.1), noul(0.1)], [noul(0.3)]);
   assert.equal(soft.verdict, 'WARN');
   assert.equal(soft.reason, 'WARN_NOUL_PROBABILITY_SHIFT');
 });
 
-test('score detects hard deltas and rejects confirmation in the opposite direction', () => {
+test('score detects hard deltas and confirms a consistent direction without an aggregate veto', () => {
   const baseline = [score(1), score(1)];
   assert.equal(compare(baseline, [score(1.5)]).verdict, 'FAIL');
   assert.equal(compare(baseline, [score(1.5), score(1.5), score(1.5)], undefined, true).verdict, 'FAIL');
   const mixed = compare(baseline, [score(1.5), score(1.5), score(0.5)], undefined, true);
-  assert.equal(mixed.verdict, 'WARN');
-  assert.equal(mixed.reason, 'WARN_FLAKY_MUTATION');
+  assert.equal(mixed.verdict, 'FAIL');
+  assert.equal(mixed.reproduced, 2);
+});
+
+test('confirmed comparisons recognize a later consistent failure signature and keep an unconfirmed first failure flaky', () => {
+  const baseline = [choice('yes'), choice('yes'), choice('yes')];
+  const laterFailure = compare(baseline, [choice('yes'), choice('no'), choice('no')], undefined, true);
+  assert.equal(laterFailure.verdict, 'FAIL');
+  assert.equal(laterFailure.reason, 'FAIL_CHOICE_CHANGED');
+  assert.equal(laterFailure.reproduced, 2);
+
+  const flakyFirst = compare(baseline, [choice('no'), choice('yes'), choice('maybe')], undefined, true);
+  assert.equal(flakyFirst.verdict, 'WARN');
+  assert.equal(flakyFirst.reason, 'WARN_FLAKY_MUTATION');
+  assert.equal(flakyFirst.reproduced, 1);
 });
 
 test('choice and score distribution/confidence soft invariants use base-two JS divergence', () => {

@@ -19,7 +19,7 @@ export function validateRequest(value: unknown): JevRequest {
   keys(value, ['state', 'model', 'questions'], 'request');
   assert(content(value.state), 'state must be string, object or array');
   assert(typeof value.model === 'string' && value.model.length > 0, 'model is required');
-  assert(record(value.questions) && Object.keys(value.questions).length > 0 && Object.keys(value.questions).length <= 64, 'questions must contain 1–64 entries');
+  assert(record(value.questions) && Object.keys(value.questions).length > 0, 'questions must contain at least one entry');
   for (const question of Object.values(value.questions)) {
     assert(record(question), 'question must be an object');
     keys(question, ['type', 'instructions', 'criteria'], 'question');
@@ -27,7 +27,7 @@ export function validateRequest(value: unknown): JevRequest {
     if (question.type === 'choice') {
       assert(record(question.criteria), 'Choice criteria must be an object');
       const options = Object.values(question.criteria);
-      assert(options.length >= 2 && options.length <= 255 && options.every(v => content(v, true)), 'Choice requires 2–255 content options');
+      assert(options.length >= 1 && options.length <= 255 && options.every(v => content(v, true)), 'Choice requires 1–255 content options');
     } else if (question.type === 'score') {
       assert(Array.isArray(question.criteria) && question.criteria.length >= 2 && question.criteria.length <= 10 && question.criteria.every(v => content(v)), 'Score requires 2–10 ordered content levels');
     } else if (question.type === 'noul') {

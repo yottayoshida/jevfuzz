@@ -6,6 +6,7 @@ const DEFAULT_TYPESAFE_HOST = 'https://api.typesafe.ai';
 const DEFAULT_TYPESAFE_PATH = '/v1/systemone';
 const CLOUDFLARE_MODEL = 'typesafe/jev';
 const MAX_ATTEMPTS = 5;
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 
 export interface ProviderOptions {
   fetch?: typeof fetch;
@@ -150,29 +151,37 @@ function abortError(signal: AbortSignal): unknown {
   return signal.reason instanceof Error ? signal.reason : providerError('PROVIDER_ABORTED', 'provider request was aborted');
 }
 
-async function realSleep(ms: number, signal?: AbortSignal): Promise<void> {
+export async function realSleep(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) throw abortError(signal);
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(done, ms);
-    function done(): void { signal?.removeEventListener('abort', cancelled); resolve(); }
-    function cancelled(): void { clearTimeout(timer); reject(abortError(signal!)); }
-    signal?.addEventListener('abort', cancelled, { once: true });
-  });
+  let remaining = ms;
+  while (remaining > 0) {
+    if (signal?.aborted) throw abortError(signal);
+    const delay = Math.min(remaining, MAX_TIMEOUT_MS);
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(done, delay);
+      function done(): void { signal?.removeEventListener('abort', cancelled); resolve(); }
+      function cancelled(): void { clearTimeout(timer); reject(abortError(signal!)); }
+      signal?.addEventListener('abort', cancelled, { once: true });
+    });
+    remaining -= delay;
+  }
 }
 
 function retryAfter(response: Response): number | undefined {
   const value = response.headers.get('retry-after');
   if (!value) return undefined;
   const seconds = Number(value);
-  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, 30_000);
+  if (Number.isFinite(seconds)) return seconds >= 0 && Number.isFinite(seconds * 1000) ? seconds * 1000 : undefined;
   const date = Date.parse(value);
-  return Number.isFinite(date) ? Math.min(Math.max(0, date - Date.now()), 30_000) : undefined;
+  return Number.isFinite(date) ? Math.max(0, date - Date.now()) : undefined;
 }
 
 abstract class HttpProvider implements DecisionProvider {
   readonly mode = 'live' as const;
   #httpAttempts = 0;
   get httpAttempts(): number { return this.#httpAttempts; }
+  #httpRetries = 0;
+  get httpRetries(): number { return this.#httpRetries; }
   readonly #fetch: typeof fetch;
   readonly #sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
   readonly #timeoutMs: number;
@@ -200,6 +209,7 @@ abstract class HttpProvider implements DecisionProvider {
       const timeout = AbortSignal.timeout(this.#timeoutMs);
       const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
       try {
+        if (attempt > 1) this.#httpRetries++;
         this.#httpAttempts++;
         const response = await this.#fetch(this.#url, {
           method: 'POST', headers: { Authorization: `Bearer ${this.#token}`, 'Content-Type': 'application/json' },
@@ -295,6 +305,7 @@ function defaultResponse(request: JevRequest): JevResponse {
 /** Offline-only provider. It never becomes a fallback for a failed live request. */
 export class FakeProvider implements DecisionProvider {
   readonly mode = 'fake' as const;
+  readonly httpRetries = 0;
   #index = 0;
   readonly #handler: (request: JevRequest, index: number) => JevResponse;
   constructor(handler: (request: JevRequest, index: number) => JevResponse = defaultResponse) { this.#handler = handler; }

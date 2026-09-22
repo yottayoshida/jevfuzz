@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { CloudflareProvider, FakeProvider, TypeSafeProvider, validateResponse } from '../src/provider.ts';
+import { CloudflareProvider, FakeProvider, TypeSafeProvider, realSleep, validateResponse } from '../src/provider.ts';
 
 test('live rounded probabilities retain raw values within their quantization bound', () => {
   const r: JevRequest = { state: 'public fixture', model: 'jev-latest', questions: { q: { type: 'choice', instructions: 'choose', criteria: { a: 'a', b: 'b', c: 'c', d: 'd', e: 'e' } } } };
@@ -61,11 +61,105 @@ test('TypeSafeProvider retries 429 and 529, serializes the request once, and pre
   });
   assert.deepEqual(await provider.evaluate(request), response);
   assert.equal(provider.httpAttempts, 3);
+  assert.equal(provider.httpRetries, 2);
   assert.equal(calls[0]!.body, calls[1]!.body);
   assert.equal(calls[1]!.body, calls[2]!.body);
   assert.equal(waits.length, 2);
   assert.equal(calls[0]!.redirect, 'manual');
   assert.equal((calls[0]!.headers as Record<string, string>).Authorization, 'Bearer private-key');
+});
+
+test('TypeSafeProvider makes no more than five actual attempts when a retryable response persists', async () => {
+  let calls = 0;
+  const provider = new TypeSafeProvider({ TYPESAFE_API_KEY: 'private-key' }, {
+    fetch: async () => { calls++; return json({}, 529); },
+    sleep: async () => {},
+  });
+  await assert.rejects(provider.evaluate(request), /HTTP 529/);
+  assert.equal(calls, 5);
+  assert.equal(provider.httpAttempts, 5);
+  assert.equal(provider.httpRetries, 4);
+});
+
+test('TypeSafeProvider honors Retry-After seconds and dates without the legacy 30-second cap', async () => {
+  for (const header of [
+    '120',
+    new Date(Date.now() + 120_000).toUTCString(),
+  ]) {
+    const waits: number[] = [];
+    let calls = 0;
+    const provider = new TypeSafeProvider({ TYPESAFE_API_KEY: 'private-key' }, {
+      fetch: async () => ++calls === 1 ? json({}, 429, { 'retry-after': header }) : json(response),
+      sleep: async (ms) => { waits.push(ms); },
+    });
+    await provider.evaluate(request);
+    assert.equal(provider.httpAttempts, 2);
+    assert.equal(provider.httpRetries, 1);
+    assert.equal(waits.length, 1);
+    assert.ok(waits[0]! >= 119_000, `expected full retry delay for ${header}, got ${waits[0]}`);
+    assert.ok(waits[0]! <= 120_000);
+  }
+});
+
+test('TypeSafeProvider falls back from malformed or negative Retry-After values', async () => {
+  for (const header of ['-1', 'not-a-delay']) {
+    const waits: number[] = [];
+    let calls = 0;
+    const provider = new TypeSafeProvider({ TYPESAFE_API_KEY: 'private-key' }, {
+      fetch: async () => ++calls === 1 ? json({}, 429, { 'retry-after': header }) : json(response),
+      sleep: async (ms) => { waits.push(ms); }, jitterSeed: 4,
+    });
+    await provider.evaluate(request);
+    assert.equal(waits.length, 1);
+    assert.ok(waits[0]! < 1_000);
+  }
+});
+
+test('realSleep chunks oversized waits and exits promptly when cancelled', async () => {
+  const controller = new AbortController();
+  const nativeSetTimeout = globalThis.setTimeout;
+  let scheduled = 0;
+  globalThis.setTimeout = ((callback: (...args: never[]) => void, delay?: number, ...args: never[]) => {
+    scheduled = Number(delay);
+    return nativeSetTimeout(callback, 0, ...args);
+  }) as unknown as typeof setTimeout;
+  try {
+    const pending = realSleep(2 ** 31, controller.signal);
+    controller.abort(new Error('cancelled'));
+    await assert.rejects(pending, /cancelled/);
+    assert.equal(scheduled, 2 ** 31 - 1);
+  } finally {
+    globalThis.setTimeout = nativeSetTimeout;
+  }
+});
+
+test('realSleep observes cancellation between completed chunks', async () => {
+  const controller = new AbortController();
+  const nativeSetTimeout = globalThis.setTimeout;
+  let calls = 0;
+  let laterTimer: ReturnType<typeof setTimeout> | undefined;
+  globalThis.setTimeout = ((callback: (...args: never[]) => void, delay?: number, ...args: never[]) => {
+    calls++;
+    if (calls === 1) return nativeSetTimeout(() => {
+      callback(...args);
+      controller.abort(new Error('between chunks'));
+    }, 0);
+    laterTimer = nativeSetTimeout(callback, delay, ...args);
+    return laterTimer;
+  }) as unknown as typeof setTimeout;
+  try {
+    const pending = realSleep(2 ** 31, controller.signal);
+    const result = await Promise.race([
+      pending.then(() => 'resolved', error => error),
+      new Promise(resolve => nativeSetTimeout(() => resolve('timed out'), 20)),
+    ]);
+    assert.ok(result instanceof Error);
+    assert.match(result.message, /between chunks/);
+    assert.equal(calls, 1);
+  } finally {
+    if (laterTimer) clearTimeout(laterTimer);
+    globalThis.setTimeout = nativeSetTimeout;
+  }
 });
 
 test('TypeSafeProvider does not retry 401 or 422 and never exposes credentials', async () => {
@@ -111,6 +205,7 @@ test('TypeSafeProvider cancellation stops a timed-out retry wait', async () => {
   });
   await assert.rejects(provider.evaluate(request, { signal: controller.signal }), /cancelled|aborted/i);
   assert.equal(calls, 1);
+  assert.equal(provider.httpRetries, 0);
 });
 
 test('TypeSafeProvider retries when response body reading times out', async () => {
@@ -155,6 +250,7 @@ test('CloudflareProvider uses the fixed Jev endpoint and refuses missing observe
 test('FakeProvider is deterministic by default and supports an injected handler', async () => {
   const fake = new FakeProvider();
   assert.deepEqual(await fake.evaluate(request), await fake.evaluate(request));
+  assert.equal(fake.httpRetries, 0);
   const custom = new FakeProvider((_request, index) => ({ ...response, model: `test-${index}` }));
   assert.equal((await custom.evaluate(request)).model, 'test-0');
   assert.equal((await custom.evaluate(request)).model, 'test-1');

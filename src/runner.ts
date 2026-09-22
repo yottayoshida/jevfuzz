@@ -1,9 +1,18 @@
 import { randomUUID } from 'node:crypto';
-import type { CaseReport, DecisionProvider, FuzzConfig, FuzzReport, JevRequest, JevResponse, Mutation, RunOptions } from './types.ts';
+import type { CaseReport, Comparison, DecisionProvider, FuzzConfig, FuzzReport, JevRequest, JevResponse, Mutation, MutationResult, RunOptions } from './types.ts';
 import { generateMutations } from './mutate.ts';
 import { compare, summarize } from './compare.ts';
+import { thresholds } from './config.ts';
 import { validateResponse } from './provider.ts';
 import { assert, freshSeed, hash, integer, FuzzError } from './util.ts';
+
+const SAFE_ERROR_CODES = new Set(['BUDGET', 'CONFIG', 'PROVIDER_ABORTED', 'PROVIDER_CONFIG', 'PROVIDER_HTTP', 'PROVIDER_NETWORK', 'PROVIDER_REQUEST', 'PROVIDER_RESPONSE', 'PROVIDER_TIMEOUT']);
+
+/** A runtime failure with the fully sanitized report accumulated before it occurred. */
+export class RunInterruptedError extends FuzzError {
+  readonly report: FuzzReport;
+  constructor(report: FuzzReport) { super(report.run.error?.code ?? 'RUN_INTERRUPTED', report.run.error?.message ?? 'run interrupted'); this.name = 'RunInterruptedError'; this.report = report; }
+}
 
 export function options(input: Partial<RunOptions> = {}): RunOptions {
   return {
@@ -26,83 +35,102 @@ export function plan(config: FuzzConfig, opts: RunOptions, prepared?: Mutation[]
   return { seed: opts.seed, cases: config.cases.length, questions: config.cases.reduce((n, c) => n + Object.keys(c.request.questions).length, 0), baselineRequests, mutationRequests, maximumConfirmationRequests, worstCaseRequests, maximumHttpAttempts: worstCaseRequests * 5, configuredLimit: opts.maxRequests, withinBudget: worstCaseRequests <= opts.maxRequests, mutationClasses };
 }
 export function exitCode(report: FuzzReport): number {
+  if (report.run.status === 'incomplete') return 2;
   if (report.summary.fail > 0) return 1;
-  if (report.run.modelChanged || (report.summary.pass === 0 && report.summary.warn === 0 && report.summary.fail === 0)) return 3;
-  return 0;
+  if (report.run.modelChanged) return 3;
+  if (report.summary.pass > 0) return 0;
+  return report.summary.warn > 0 && report.summary.inconclusive === 0 ? 0 : 3;
 }
+function plannedMutationResult(caseIndex: number, mutationIndex: number, mutation: Mutation): MutationResult {
+  return { id: `M${caseIndex + 1}-${mutationIndex + 1}`, mutation: mutation.recipe, idMap: mutation.idMap, requestHash: hash(mutation.request), request: mutation.request, responses: [], comparisons: {} };
+}
+function safeErrorCode(error: unknown): string { return error instanceof FuzzError && SAFE_ERROR_CODES.has(error.code) ? error.code : 'RUN_INTERRUPTED'; }
+
 export async function run(config: FuzzConfig, provider: DecisionProvider, input: Partial<RunOptions> = {}, prepared?: Mutation[][]): Promise<FuzzReport> {
   const opts = options(input);
   const mutations = prepared ?? config.cases.map(c => generateMutations(c, opts.seed));
   const budget = plan(config, opts, mutations);
   if (!budget.withinBudget) throw new FuzzError('BUDGET', `request budget exceeded: planned worst case ${budget.worstCaseRequests}, --max-requests ${opts.maxRequests}`);
-  const startAttempts = provider.httpAttempts ?? 0;
+  const startAttempts = provider.httpAttempts ?? 0, startRetries = provider.httpRetries;
   const { signal: ignored, ...savedOptions } = opts;
-  const report: FuzzReport = {
-    version: 1,
-    run: { id: randomUUID(), timestamp: new Date().toISOString(), seed: opts.seed, jevfuzzVersion: '0.1.0', nodeVersion: process.version,
-      mode: provider.mode ?? 'custom', providerMode: provider.mode ?? 'custom', requestedModels: [...new Set(config.cases.map(c => c.request.model))], observedModels: [], modelChanged: false,
-      configHash: hash(config), options: savedOptions },
-    summary: { cases: config.cases.length, questions: budget.questions, mutations: budget.mutationRequests, pass: 0, warn: 0, fail: 0, inconclusive: 0,
-      logicalRequests: 0, httpAttempts: 0, usage: { inputTokens: 0, outputTokens: 0 } }, cases: [],
+  const report: FuzzReport = { version: 1,
+    run: {
+      id: randomUUID(), timestamp: new Date().toISOString(), seed: opts.seed, jevfuzzVersion: '0.1.0', nodeVersion: process.version,
+      mode: provider.mode ?? 'custom', providerMode: provider.mode ?? 'custom', requestedModels: [...new Set(config.cases.map(c => c.request.model))],
+      observedModels: [], modelChanged: false, configHash: hash(config), options: savedOptions, status: 'complete',
+    },
+    summary: { cases: config.cases.length, questions: budget.questions, mutations: budget.mutationRequests, pass: 0, warn: 0, fail: 0, inconclusive: 0, logicalRequests: 0, httpAttempts: 0, usage: { inputTokens: 0, outputTokens: 0 } },
+    cases: config.cases.map((c, caseIndex): CaseReport => ({
+      id: c.id, caseHash: hash(c), baselineRequestHash: hash(c.request), baselineRequest: c.request,
+      baselineResponses: [], baseline: {}, invariants: c.invariants,
+      thresholds: Object.fromEntries(Object.keys(c.request.questions).map(question => [question, thresholds(Object.hasOwn(c.invariants, question) ? c.invariants[question] : undefined)])),
+      mutations: mutations[caseIndex]!.map((m, mutationIndex) => plannedMutationResult(caseIndex, mutationIndex, m)),
+    })),
   };
-  const controller = new AbortController();
-  const signal = opts.signal ? AbortSignal.any([opts.signal, controller.signal]) : controller.signal;
+  const controller = new AbortController(), signal = opts.signal ? AbortSignal.any([opts.signal, controller.signal]) : controller.signal;
   const evaluate = async (request: JevRequest): Promise<JevResponse> => {
     signal.throwIfAborted();
     if (report.summary.logicalRequests >= opts.maxRequests) throw new FuzzError('BUDGET', 'logical request limit reached');
     report.summary.logicalRequests++;
-    // Own a copy so custom provider code cannot change the frozen confirmation payload.
     const response = validateResponse(await provider.evaluate(structuredClone(request), { signal }), request);
     if (report.run.observedModel === undefined) report.run.observedModel = response.model;
     if (!report.run.observedModels.includes(response.model)) report.run.observedModels.push(response.model);
     if (report.run.observedModel !== response.model) report.run.modelChanged = true;
-    report.summary.usage.inputTokens += response.usage.input_tokens;
-    report.summary.usage.outputTokens += response.usage.output_tokens;
+    report.summary.usage.inputTokens += response.usage.input_tokens; report.summary.usage.outputTokens += response.usage.output_tokens;
     return response;
   };
+  let runtimeError: unknown;
+  let interrupted = false;
   try {
     for (let caseIndex = 0; caseIndex < config.cases.length; caseIndex++) {
-      const c = config.cases[caseIndex]!;
+      const c = config.cases[caseIndex]!, caseReport = report.cases[caseIndex]!, list = mutations[caseIndex]!;
       const invariant = (question: string) => Object.hasOwn(c.invariants, question) ? c.invariants[question] : undefined;
-      const baselineResponses: JevResponse[] = [];
-      for (let i = 0; i < (opts.baselineRuns ?? c.baselineRuns); i++) baselineResponses.push(await evaluate(c.request));
-      const caseReport: CaseReport = {
-        id: c.id, caseHash: hash(c), baselineRequestHash: hash(c.request), baselineRequest: c.request,
-        baselineResponses, baseline: Object.fromEntries(Object.keys(c.request.questions).map(q => [q, summarize(baselineResponses.map(r => r.answers[q]!), invariant(q))])),
-        invariants: c.invariants, mutations: [],
-      };
-      report.cases.push(caseReport);
-      let next = 0;
-      const list = mutations[caseIndex]!;
+      for (let i = 0; i < (opts.baselineRuns ?? c.baselineRuns); i++) caseReport.baselineResponses.push(await evaluate(c.request));
+      let next = 0, firstWorkerError: unknown, firstWorkerErrorCaptured = false;
       const worker = async () => {
         while (!signal.aborted) {
           const index = next++; if (index >= list.length) return;
-          const m = list[index]!;
-          const responses = [await evaluate(m.request)];
-          const mapped = (response: JevResponse, q: string) => {
-            const renamed = Object.entries(m.idMap).find(([, original]) => original === q)?.[0] ?? q;
-            return response.answers[renamed]!;
-          };
-          const comparisons = () => Object.fromEntries(Object.keys(c.request.questions).map(q => [q, compare(baselineResponses.map(r => r.answers[q]!), responses.map(r => mapped(r, q)), invariant(q), responses.length > 1)]));
-          let results = comparisons();
-          if (!report.run.modelChanged && Object.values(results).some(r => r.verdict === 'FAIL')) {
-            for (let i = 0; i < opts.confirmRuns; i++) responses.push(await evaluate(m.request));
-            results = comparisons();
+          const mutation = list[index]!, mutationReport = caseReport.mutations[index]!;
+          try {
+            mutationReport.responses.push(await evaluate(mutation.request));
+            const mapped = (response: JevResponse, question: string) => response.answers[Object.entries(mutation.idMap).find(([, original]) => original === question)?.[0] ?? question]!;
+            const initial = Object.fromEntries(Object.keys(c.request.questions).map(question => [question, compare(caseReport.baselineResponses.map(response => response.answers[question]!), mutationReport.responses.map(response => mapped(response, question)), invariant(question), false)])) as Record<string, Comparison>;
+            if (!report.run.modelChanged && Object.values(initial).some(result => result.verdict === 'FAIL')) for (let confirmation = 0; confirmation < opts.confirmRuns; confirmation++) mutationReport.responses.push(await evaluate(mutation.request));
+          } catch (error) {
+            if (!firstWorkerErrorCaptured) { firstWorkerError = error; firstWorkerErrorCaptured = true; }
+            controller.abort();
+            throw error;
           }
-          caseReport.mutations[index] = { id: `M${caseIndex + 1}-${index + 1}`, mutation: m.recipe, idMap: m.idMap, requestHash: hash(m.request), request: m.request, responses, comparisons: results };
         }
       };
-      const settled = await Promise.allSettled(Array.from({ length: Math.min(opts.concurrency, list.length) }, async () => {
-        try { await worker(); } catch (error) { controller.abort(); throw error; }
-      }));
-      const failed = settled.find((r): r is PromiseRejectedResult => r.status === 'rejected');
-      if (failed) throw failed.reason;
+      const settled = await Promise.allSettled(Array.from({ length: Math.min(opts.concurrency, list.length) }, worker));
+      if (firstWorkerErrorCaptured) throw firstWorkerError;
+      const failed = settled.find((result): result is PromiseRejectedResult => result.status === 'rejected'); if (failed) throw failed.reason;
     }
-  } catch (error) { controller.abort(); throw error; }
-  for (const c of report.cases) for (const m of c.mutations) for (const result of Object.values(m.comparisons)) {
-    if (report.run.modelChanged) { result.verdict = 'INCONCLUSIVE'; result.reason = 'INCONCLUSIVE_MODEL_CHANGED'; }
+    signal.throwIfAborted();
+  } catch (error) { runtimeError = error; interrupted = true; controller.abort(); }
+  for (let caseIndex = 0; caseIndex < config.cases.length; caseIndex++) {
+    const c = config.cases[caseIndex]!, caseReport = report.cases[caseIndex]!;
+    const invariant = (question: string) => Object.hasOwn(c.invariants, question) ? c.invariants[question] : undefined;
+    if (caseReport.baselineResponses.length >= 2) caseReport.baseline = Object.fromEntries(Object.keys(c.request.questions).map(question => [question, summarize(caseReport.baselineResponses.map(response => response.answers[question]!), invariant(question))]));
+    for (let mutationIndex = 0; mutationIndex < caseReport.mutations.length; mutationIndex++) {
+      const mutation = mutations[caseIndex]![mutationIndex]!, mutationReport = caseReport.mutations[mutationIndex]!;
+      if (caseReport.baselineResponses.length < 2 || mutationReport.responses.length === 0) continue;
+      const mapped = (response: JevResponse, question: string) => response.answers[Object.entries(mutation.idMap).find(([, original]) => original === question)?.[0] ?? question]!;
+      mutationReport.comparisons = Object.fromEntries(Object.keys(c.request.questions).map(question => [question, compare(caseReport.baselineResponses.map(response => response.answers[question]!), mutationReport.responses.map(response => mapped(response, question)), invariant(question), mutationReport.responses.length >= opts.confirmRuns + 1)]));
+      if (interrupted && mutationReport.responses.length < opts.confirmRuns + 1) for (const comparison of Object.values(mutationReport.comparisons)) if (comparison.verdict === 'FAIL') { comparison.verdict = 'INCONCLUSIVE'; comparison.reason = 'INCONCLUSIVE_CONFIRMATION_INTERRUPTED'; comparison.warnings = []; }
+    }
+  }
+  for (const c of report.cases) for (const mutation of c.mutations) for (const result of Object.values(mutation.comparisons)) {
+    if (report.run.modelChanged) { result.verdict = 'INCONCLUSIVE'; result.reason = 'INCONCLUSIVE_MODEL_CHANGED'; result.warnings = []; }
     report.summary[result.verdict.toLowerCase() as 'pass' | 'warn' | 'fail' | 'inconclusive']++;
   }
   report.summary.httpAttempts = (provider.httpAttempts ?? startAttempts) - startAttempts;
+  if (startRetries !== undefined && provider.httpRetries !== undefined) report.summary.httpRetries = provider.httpRetries - startRetries;
+  if (interrupted) {
+    report.run.status = 'incomplete';
+    report.run.error = { code: opts.signal?.aborted ? 'PROVIDER_ABORTED' : safeErrorCode(runtimeError), message: 'run interrupted' };
+    throw new RunInterruptedError(report);
+  }
   return report;
 }

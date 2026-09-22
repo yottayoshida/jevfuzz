@@ -28,6 +28,30 @@ generated paraphrases, or correctness oracle are included.
 * Observable truth: report raw probabilities, baseline statistics, exact mutation
   recipes, confirmations, model changes, logical/HTTP counters and token usage.
 
+## Completion-audit corrections
+
+The second PRD audit separated three bounded changes: confirmation/retry policy;
+runner terminalization; and artifact/CLI presentation. The last two share one
+invariant and ship together: once execution allocates a run ID, a provider error
+or cancellation must expose an explicitly incomplete report after every worker
+settles. It retains validated answers and exact counters, never a raw exception
+or stack. Preflight configuration and budget failures make no paid calls.
+Unfinished confirmations cannot become FAILs or replay artifacts. Complete
+confirmed failures preceding a later interruption remain available as evidence.
+
+The CLI applies raw and trimmed credential filtering before both output and
+persistence. Hash-only storage also strips partial payloads. Both HTTP providers
+support timeout and cooperative cancellation; custom providers must honor the
+supplied signal, otherwise waiting for their settlement may delay persistence.
+The operator can cancel long Retry-After waits. HTTP retries count actual fetch
+attempts after the first attempt, including interrupted runs.
+
+Fresh read-only risk treatment approved this decomposition before edits, with
+counterexamples for partial baselines, partial confirmations, concurrent abort,
+secret echoes, and the numeric two-of-three rule. The official API reference
+allows structured instructions, nullable Choice descriptions, and 2–10 Score
+levels; its concrete types take precedence over the PRD's `unknown` pseudotypes.
+
 Verification uses the Node test runner offline, built CLI subprocess tests, injected
 fetch at the network boundary, and separately invoked live smoke. Live is never
 replaced by fake results. Each completed slice runs typecheck, tests, and build.

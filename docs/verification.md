@@ -1,126 +1,135 @@
-# v0.1 delivery evidence — 2026-09-22
+# v0.1 PRD completion evidence — 2026-09-22
 
-The six implementation slices and PRD Definition of Done are implemented.
-The user explicitly selected **Cloudflare-hosted Jev** for live verification;
-the default TypeSafe provider remains implemented and tested with injected fetch.
-TypeSafe-direct live authentication was not exercised because no TypeSafe key was
-available. This is the sole approved provider-scope exception.
+The six implementation phases and mandatory functionality were audited against
+the unchanged [PRD](PRD.md). The second audit corrected confirmation, retry,
+interrupted-run retention, CLI reporting and validation gaps. Earlier green
+tests alone did not establish PRD completion.
 
-## Acceptance evidence
+The user explicitly selected **Cloudflare-hosted Jev** for live verification.
+TypeSafe remains the default provider with its HTTP contract tested offline.
+TypeSafe-direct live authentication was not exercised because no TypeSafe key
+was available. This is the approved provider exception, not a fake fallback.
 
-| PRD requirement | Evidence |
+## PRD coverage
+
+| Sections | Implementation and evidence |
 | --- | --- |
-| Standalone OSS CLI/library, Node 22+, ESM | Public repository, MIT license, zero runtime dependencies, built CLI and library declarations. |
-| Offline tests/typecheck/build | `npm test`: 43 passed, 0 failed/skipped; `npm run typecheck` and `npm run build`: exit 0. |
-| Runnable installed CLI | `npm pack`, local offline tarball installation, installed `.bin/jevfuzz plan`: exit 0 and expected JSON. |
-| Doctor without secret output | Built CLI with Cloudflare environment: exit 0, key reported only as present; offline zero-fetch regression. |
-| Zero-network plan and correct request ceiling | CLI fetch-spy tests; smoke plan 12, constructed case 21, ten-case plan 318 worst-case logical requests. |
-| Choice, Noul, Score | Typed response validation, baseline and comparator tests; live Choice/Noul smoke. |
-| Baseline instability and model isolation | Runner tests prove unstable questions never FAIL and late model drift invalidates earlier verdicts. |
-| Seeded Tier A and declared mutations | Structural isolation tests, immutable source data, repeat payload bytes in separate Node processes. |
-| Confirmation | Position-sensitive provider integration; exact request bytes repeated; 2/3 same failure required. |
-| 429/529 retry, timeout, auth failure | Injected-fetch tests, bounded attempts, no retry for auth/config HTTP errors. |
-| Cost limit and concurrency | Zero-call preflight rejection, sequential baselines and bounded worker-pool tests. |
-| Human/JSON reports and replay | Private artifact and hash-only tests; real counterexample replay below. |
-| Credential safety | Provider echo, trace padded-token, and artifact tests; actual configured credential scanned against tracked files with zero matches. |
-| Live smoke | Explicit `npm run test:live`: exit 0, 6 logical/HTTP requests, Jev 1.13.0. |
-| Intent-review dogfood | Constructed PRD fixture plus 10 distinct captured states, 19 questions, 96 mutations. |
-| Optional trace/export | Separate `jev-intent-review` branch `codex/jevfuzz-trace`; final 244 offline tests passed, 0 skipped. |
-| Honest limitations | README, mutation-safety document, provider exception and residual risks below. |
+| 0–3, 29, 31, 35 | Standalone MIT CLI/library, zero runtime dependencies, stability limitations, no generated mutations or prohibited features; README quick start. |
+| 4, 17–18 | Choice/Noul/Score, TypeSafe/Fake providers, explicit Cloudflare adapter, observed model, timeout, 429/529 retries, full Retry-After and cancellation. Mocked fetch tests preserve bytes and reject invalid auth/responses. |
+| 5–8 | All five commands and flags, Node 22.18 doctor check, zero-network plan, version-1 config and raw request format, exit codes; built and installed CLI executed. |
+| 9–11, 14 | Seeded Tier A and declared array/field/prose mutations; tests cover isolation, remapping, Score order, cross-process byte identity and soft invariants. |
+| 12–13, 15–16 | Per-question baselines, hard invariants, same-signature two-thirds confirmation without aggregate veto; unstable baselines and model drift cannot FAIL. |
+| 19–20 | Whole-run worst-case preflight, atomic logical counter, sequential baselines and bounded mutation workers; actual HTTP attempts/retries separately counted. |
+| 21–24 | Versioned JSON, private atomic artifacts, hashes, effective thresholds, responses, replay, actionable human failures; interrupted runs retain settled evidence, mark incomplete and exit 2. |
+| 25 | Separate optional normalized trace export in jev-intent-review, private append-only paths, credential filtering, symlink rejection and environment propagation; import validates metadata and reruns baselines. |
+| 26 | One real review run captured 24 distinct states; ten imported states received 100 Tier A mutations. Exact results below. |
+| 27, 33 | Offline Node tests, typecheck/build, manual paid smoke, real run and independent replay cover the DoD through unit, injected-provider, CLI and live evidence. |
+| 28, 34 | Small explicit modules in six phases, with verification throughout; initial work was grouped into phases rather than nineteen separately recorded commits. |
+| 30 | No telemetry/uploads/third-party mutation model; destination guards, credential echo denial, raw/trimmed secret filtering and payload-free artifacts tested. |
+| 32 | Representative 100-mutation measurement meets CPU, artifact and memory targets below. |
+| 36 | Built CLI reports a real confirmed failure, exact artifact path and replay command, retaining the selected Cloudflare flag. |
 
-`npm test` covers six test files. Six deliberate faults were introduced into
-disposable copies (config validation, baseline guard, 529 retry, request budget,
-payload-free storage, CLI exit); all six caused the intended tests to fail.
-The later rounding, installed-bin, and identifier regressions were observed RED
-before their fixes and GREEN afterward. Production sources were never mutated
-for the disposable fault tests.
+The current-main trace integration is submitted separately as
+[jev-intent-review PR #56](https://github.com/yottayoshida/jev-intent-review/pull/56)
+at f247dd0. Its six focused tests, typecheck and build passed; the full local
+suite passed 339 tests with zero failures/skips. The PR is not merged.
 
-## Live results
+Concrete request types follow the current [official API](https://docs.typesafe.ai/api)
+as §35 requires: structured instructions, nullable Choice descriptions, and
+2–10 Score levels. The undocumented 64-question cap and two-option Choice
+minimum were removed.
 
-All completed runs below observed `jev-1.13.0`; credentials and payload artifacts
-remain local in the ignored `.jevfuzz/` directory.
-
-| Experiment | Cases / questions | Mutated requests | PASS / WARN / FAIL / INCONCLUSIVE | Logical / HTTP requests |
-| --- | --- | --- | --- | --- |
-| Small smoke | 1 / 2 | 3 | 6 / 0 / 0 / 0 | 6 / 6 |
-| PRD manually constructed propagation decision | 1 / 1 | 6 | 6 / 0 / 0 / 0 | 9 / 9 |
-| Captured intent-review dogfood | 10 / 19 | 96 | 177 / 2 / 7 / 0 | 142 / 142 |
-| Independent replay of F002 | 1 / 2 | 1 | 1 / 0 / 1 / 0 | 6 / 6 |
-
-Verdict totals count **question × mutation** comparisons. Mutation totals count
-whole-state requests, each containing every question. The 19 dogfood baselines
-were all stable (instability rate 0/19). Two confirmed failures came from Choice
-criterion order and five from object-key order. Warnings were one confidence
-drop and one flaky question-order mutation; no JS threshold warnings occurred.
-Dogfood usage: **159,961 input tokens and 17,923 output tokens**, zero HTTP
-retries in the completed run.
-
-The optional exporter captured 14 logical evaluations from real
-`jev-intent-review` runs on its public synthetic `missed-path` and
-`unknown-plugin` fixtures (8 + 6 calls). The first fixture produced eight
-distinct states, so the second supplied enough to select ten. Its ordinary
-review verdicts were not used as truth. JevFuzz imported requests and collected
-its own baselines.
-
-The live API exposed an important compatibility detail: two-decimal
-probabilities may sum to 0.99. An earlier dogfood attempt stopped on that strict
-validation failure (one diagnostic attempt reached 95 HTTP requests). These
-aborted attempts are excluded from completed-run counts above. The provider now
-accepts only the implied rounding interval and preserves raw values; an exact
-captured response regression covers the correction.
-
-Completed dogfood run: `b895cd7e-e6eb-4a0a-8d42-b0e9c8a89c69`.
-Independent replay run: `41642c48-0314-4686-a732-01fdfd909f90`.
-
-```text
-FAIL choice_changed — actual live counterexample, F002
-case: intent-review-0001
-question: relevance
-mutation: object_key_order / reverse
-baseline: supporting 3/3
-mutated:  unrelated 3/3
-replay: baseline supporting 3/3, mutated unrelated 3/3
-```
-
-The CLI's exit 1 in dogfood/replay is the expected successful detection of a
-confirmed metamorphic violation, not an implementation/test-suite failure.
-
-Reproduction commands after configuring Cloudflare credentials:
+## Fresh local verification
 
 ```sh
-jevfuzz import .jevfuzz/dogfood/first-ten.jsonl --out .jevfuzz/dogfood/imported
-jevfuzz plan '.jevfuzz/dogfood/imported/*.jevfuzz.json' --seed 42 --max-requests 318 --json
-jevfuzz run '.jevfuzz/dogfood/imported/*.jevfuzz.json' --provider cloudflare --seed 42 --max-requests 318 --concurrency 4
-jevfuzz replay .jevfuzz/runs/b895cd7e-e6eb-4a0a-8d42-b0e9c8a89c69/failures/F002.json --provider cloudflare --max-requests 6
+npm run typecheck
+npm test
+npm run build
+node dist/cli/main.js plan fixtures/live-smoke.jevfuzz.json --seed 42 --json
+git diff --check
 ```
 
-Live smoke was invoked through `npm run test:live` with private environment
-values inherited by the subprocess. The completed ten-state run invoked the
-same exported CLI `main` with `CloudflareProvider` and a diagnostic fetch wrapper
-that reported invalid response shapes; it used the arguments above. Import,
-plan, constructed run, and replay were executed through the built CLI.
+All exited 0. **61 tests passed, 0 failed, 0 skipped.** CI runs the suite,
+build, built CLI plan and package dry run on Node 22.18.0 and 24; current-head
+results are in GitHub Actions. An installed-bin subprocess regression exercises
+symlink dispatch; a packed tarball was also installed and executed separately.
 
-## Review and limits
+New defects were reproduced before fixes: numeric confirmation, long retry
+delay, interrupted execution, Node minor version, trimmed credentials and trace
+metadata. Two disposable mutants removed replay-map ownership and the Cloudflare
+replay flag; each caused the intended test failure, followed by green tests.
+Earlier six disposable faults covered config, baseline guard, retry, budget,
+payload-free storage and CLI exits. Production sources were restored/left intact.
 
-Read-only risk treatment used the configured Sol/high risk-specialist role.
-Implementation slices used configured Terra/medium; independent local review
-used configured Terra/high/read-only. Serving model IDs are not independently
-exposed by the runtime. Review found a trace-token normalization defect, fixed
-and re-reviewed with the padded-token regression. Core corrections were also
-reviewed. These are **local review evidence**, not GitHub review approvals.
+## Single-run live dogfood
 
-The review-package helper falsely classified ordinary TypeScript Authorization
-assignments and dummy test credentials as secrets; the reviewer instead received
-explicit bounded commit ranges, file allowlists, entrypoints, verification, and
-same-class search terms. Actual configured credentials were not in the package.
+A throwaway repository combined the public synthetic missed-path and
+unknown-plugin fixtures and their two requirements. **One** real review CLI
+invocation produced 24 distinct request states within a 40-request capture
+budget. JevFuzz imported the first ten and collected its own baselines; stored
+answers were never truth. Capture used the separately committed exporter before
+its port onto the newer upstream main.
 
-Small local timing check: 102 mutations generated in 1.07 ms; 100 comparisons
-in 1.31 ms; process RSS 87.6 MiB. This is a spot measurement on Node 26.7.0, not
-a general performance guarantee. Correctness tests do not assert wall-clock time.
+```sh
+jevfuzz import .jevfuzz/dogfood-single/first-ten.jsonl --out .jevfuzz/dogfood-single/imported
+jevfuzz plan '.jevfuzz/dogfood-single/imported/*.jevfuzz.json' --seed 42 --max-requests 330 --json
+jevfuzz run '.jevfuzz/dogfood-single/imported/*.jevfuzz.json' --provider cloudflare --seed 42 --max-requests 330 --concurrency 4
+jevfuzz replay .jevfuzz/runs/74c77d65-2a40-44ee-95f9-1adae698234a/failures/F001.json --provider cloudflare --max-requests 6
+```
 
-No npm publication or release was performed. The separate trace-export branch
-has not been pushed or merged into `jev-intent-review`. TypeSafe-direct live
-behavior remains unverified; its HTTP contract is covered offline. Timeout
-retries can be billed twice, declared irrelevance remains the user's assertion,
-and full local artifacts may contain source content. A FAIL proves instability
-under the declared transformation, not which answer is factually correct.
+Run and replay used the built dist/cli/main.js entrypoint. Every response reported
+jev-1.13.0; no retries or model drift occurred.
+
+| Measurement | Dogfood | Independent replay |
+| --- | ---: | ---: |
+| Cases / questions | 10 / 20 | 1 / 2 |
+| Mutations | 100 | 1 |
+| PASS / WARN / FAIL / INCONCLUSIVE | 189 / 5 / 6 / 0 | 1 / 0 / 1 / 0 |
+| Unstable baseline questions | 0 / 20 | 0 / 2 |
+| Logical / HTTP requests | 148 / 148 | 6 / 6 |
+| Input / output tokens | 168,331 / 19,350 | 5,670 / 774 |
+
+Verdicts count question × mutation comparisons. One confirmed failure came from
+Choice order, five from object-key order. Warnings were two confidence drops and
+three flaky mutations; no JS-divergence or Noul-shift warnings occurred. Executed
+mutations by class: question ID 10, question order 10, Choice order 60, object
+keys 20. Dogfood run: 74c77d65-2a40-44ee-95f9-1adae698234a. Replay run:
+295da09d-3bbf-4765-b2d4-9e119395463a. Both exited 1 for successful detection.
+
+```text
+relevance object_key_order / reverse: FAIL (FAIL_CHOICE_CHANGED)
+  baseline: unrelated 3/3
+  mutated: may_violate 3/3
+  independent replay: unrelated 3/3 -> may_violate 3/3
+```
+
+Earlier acceptance included a tiny live smoke (six requests, two questions) and
+a constructed intent-review decision (nine requests, six mutations, all PASS).
+The original ten-state experiment combined two review runs; the single-run
+experiment above replaces it as §26 evidence. Aborted diagnostic calls are not
+included in completed-run totals. One exposed rounded probability sums of 0.99;
+a regression now preserves those raw probabilities within their rounding bound.
+
+## Performance and review scope
+
+Local Node 26.7.0, same ten imported cases with FakeProvider and no network:
+100 mutations in **4.06 ms**, 100 comparisons in **1.32 ms**, private artifact
+and report generation in **24.06 ms**, maximum RSS **66.06 MiB**. The actual live
+100-mutation CLI process peaked at **98,123,776 bytes** RSS (93.58 MiB), measured
+with /usr/bin/time -l. These are local measurements, not guarantees for arbitrary
+input sizes.
+
+Risk treatment used the configured Sol/high role, implementation Terra/medium,
+and independent local review Terra/high. The secondary trace's intermediate
+symlink defect was reproduced, fixed and re-reviewed. This is local review
+evidence, not a GitHub approval. Serving model IDs cannot be queried independently.
+The optional local quality-receipt helper returned QUALITY_SESSION_MISSING for
+this sibling repository; no hook ledger was fabricated. Executed test and live
+evidence above, plus current-head CI, remain the verification record.
+
+No npm publication or release is required or performed. Credentials, captured
+states and report payloads stay local in ignored .jevfuzz/. TypeSafe-direct live
+behavior remains unverified under the approved Cloudflare choice. Custom
+providers that ignore cancellation can delay partial-report persistence;
+timeout retries can be billed twice. FAIL proves instability under the declared
+transformation, not which answer is factually correct.

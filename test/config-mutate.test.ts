@@ -19,6 +19,22 @@ test('raw and wrapper configuration infer defaults and reject unknown schemas/ty
   assert.throws(() => parseConfig({ ...raw, questions: { s: { type: 'score', instructions: 'x', criteria: ['a'] } } }), /Score/);
   assert.throws(() => thresholds({ scoreDelta: 0 }), /positive/);
 });
+test('request validation accepts a single Choice option and more than 64 questions without widening scalar content', () => {
+  assert.doesNotThrow(() => parseConfig({
+    state: 'state', model: 'jev-latest', questions: {
+      only: { type: 'choice', instructions: ['choose'], criteria: { yes: null } },
+    },
+  }));
+  const questions = Object.fromEntries(Array.from({ length: 65 }, (_, index) => [
+    `q${index}`, { type: 'noul', instructions: { prompt: 'decide' } },
+  ]));
+  assert.doesNotThrow(() => parseConfig({ state: {}, model: 'jev-latest', questions }));
+  assert.throws(() => parseConfig({
+    state: 'state', model: 'jev-latest', questions: {
+      invalid: { type: 'choice', instructions: 'choose', criteria: { yes: 1 } },
+    },
+  }), /Choice/);
+});
 test('seeded RNG and mutations reproduce bytes without modifying the original', () => {
   const a = rng(42), b = rng(42); assert.deepEqual(Array.from({ length: 20 }, a), Array.from({ length: 20 }, b));
   const input = fixture(), before = JSON.stringify(input);

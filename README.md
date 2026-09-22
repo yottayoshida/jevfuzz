@@ -123,8 +123,8 @@ independent of other questions in the same request.
 Choice flips, Noul threshold crossings with a mean shift of at least 0.15, and
 Score shifts of at least 0.5 are candidates. The exact mutated payload is rerun
 twice by default. At least two thirds of observations must reproduce the same
-failing verdict, and the combined mean/modal verdict must still fail. Otherwise
-the result is `WARN_FLAKY_MUTATION`.
+failing verdict. An outlying third observation does not veto two matching
+failures. Otherwise the candidate is `WARN_FLAKY_MUTATION`.
 
 Choice/Score JS divergence (base 2) at least 0.15, confidence drop at least 0.30,
 and nonflipping Noul shift at least 0.20 produce warnings. Confidence is not
@@ -150,7 +150,12 @@ Artifacts stay local. New directories use 0700, files 0600 where supported, and
 symlinks/overwrites are refused. **Full artifacts may contain private source and
 prompts.** File permissions do not prevent the same user from committing them;
 keep `.jevfuzz/` ignored. `--no-save-payloads` persists hashes and summaries only,
-and disables replay. A runtime error aborts without claiming a complete report.
+and disables replay. A runtime error or cancellation saves a partial report with
+`run.status: "incomplete"` and `manifest.complete: false`, then exits 2. Validated
+answers and exact HTTP retry counts survive the interruption; unfinished
+confirmations never become failure artifacts. Library callers can catch
+`RunInterruptedError` and read its `report`. Custom providers must honor the
+supplied abort signal so in-flight work can settle before persistence.
 Replay uses your current provider configuration and rechecks its request budget;
 historical answers are never treated as truth.
 

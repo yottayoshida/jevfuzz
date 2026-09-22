@@ -3,5 +3,5 @@ export { parseConfig, loadConfig, validateRequest, thresholds, DEFAULT_THRESHOLD
 export { TypeSafeProvider, CloudflareProvider, FakeProvider, validateResponse } from './provider.ts';
 export { generateMutations } from './mutate.ts';
 export { compare, summarize, jsDivergence } from './compare.ts';
-export { run, plan, options, exitCode } from './runner.ts';
+export { run, plan, options, exitCode, RunInterruptedError } from './runner.ts';
 export { saveArtifacts, loadFailure, renderText, replay, importTrace } from './artifacts.ts';

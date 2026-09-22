@@ -2,7 +2,7 @@ import { open, lstat, mkdir, readFile, rename, rm } from 'node:fs/promises';
 import { join, parse, resolve } from 'node:path';
 import type { DecisionProvider, FailureArtifact, FuzzConfig, FuzzReport, Mutation, RunOptions } from './types.ts';
 import { parseConfig, thresholds, validateRequest } from './config.ts';
-import { run } from './runner.ts';
+import { run, RunInterruptedError } from './runner.ts';
 import { assert, FuzzError, hash, integer, record } from './util.ts';
 
 async function status(path: string) {
@@ -48,7 +48,6 @@ function hashOnly(report: FuzzReport): unknown {
 
 function failure(report: FuzzReport, c: FuzzReport['cases'][number], m: FuzzReport['cases'][number]['mutations'][number], questionId: string): FailureArtifact {
   const comparison = m.comparisons[questionId]!;
-  const mappedQuestion = Object.entries(m.idMap).find(([, original]) => original === questionId)?.[0] ?? questionId;
   assert(c.baselineRequest !== undefined && m.request !== undefined, 'payloads required for replay artifact');
   return {
     version: 1, runId: report.run.id, caseId: c.id, questionId, mutation: m.mutation, idMap: m.idMap,
@@ -59,8 +58,8 @@ function failure(report: FuzzReport, c: FuzzReport['cases'][number], m: FuzzRepo
   };
 }
 
-/** Persist a complete run atomically under <directory>/runs/<run-id>. */
-export async function saveArtifacts(report: FuzzReport, directory: string, savePayloads = true): Promise<string> {
+/** Persist a settled run atomically under <directory>/runs/<run-id>. */
+export async function saveArtifacts(report: FuzzReport, directory: string, savePayloads = true, replayProvider?: 'typesafe' | 'cloudflare'): Promise<string> {
   assert(report.version === 1 && /^[A-Za-z0-9-]+$/.test(report.run.id), 'invalid report for artifact storage');
   const root = await privateDirectory(directory);
   const runs = await privateDirectory(join(root, 'runs'));
@@ -71,8 +70,8 @@ export async function saveArtifacts(report: FuzzReport, directory: string, saveP
   try {
     const persisted = savePayloads ? report : hashOnly(report);
     await writePrivate(join(stage, 'report.json'), `${JSON.stringify(persisted, null, 2)}\n`);
-    await writePrivate(join(stage, 'report.txt'), `${renderText(report)}\n`);
-    const manifest = { version: 1, complete: true, replay: { available: savePayloads, reason: savePayloads ? undefined : 'REPLAY_UNAVAILABLE_NO_PAYLOADS' }, run: report.run, summary: report.summary };
+    await writePrivate(join(stage, 'report.txt'), `${renderText(report, { directory: destination, savePayloads, replayProvider })}\n`);
+    const manifest = { version: 1, complete: report.run.status !== 'incomplete', replay: { available: savePayloads, reason: savePayloads ? undefined : 'REPLAY_UNAVAILABLE_NO_PAYLOADS' }, run: report.run, summary: report.summary };
     await writePrivate(join(stage, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
     if (savePayloads) {
       let sequence = 0;
@@ -98,11 +97,13 @@ function probabilities(label: string, values?: Record<string, number>): string {
 }
 
 /** Render the public report fields without generating interpretation prose. */
-export function renderText(report: FuzzReport): string {
+export function renderText(report: FuzzReport, artifacts: { directory?: string; savePayloads?: boolean; replayProvider?: 'typesafe' | 'cloudflare' } = {}): string {
   const lines = [`JevFuzz ${report.run.jevfuzzVersion}`, `model: ${report.run.observedModel ?? 'unobserved'}`, `seed: ${report.run.seed}`];
   if (report.run.mode === 'replay') lines.push('mode: replay');
   else lines.push(`mode: ${report.run.mode}`);
+  if (report.run.status === 'incomplete') lines.push(`run incomplete: ${report.run.error?.code ?? 'RUNTIME'}; results below are partial`);
   if (report.run.modelChanged) lines.push(`model drift: requested ${report.run.requestedModels.join(', ')}; observed ${report.run.observedModels.join(' -> ')}`);
+  let failureSequence = 0;
   for (const c of report.cases) {
     lines.push('', `${c.id}`);
     for (const [question, baseline] of Object.entries(c.baseline)) {
@@ -111,13 +112,33 @@ export function renderText(report: FuzzReport): string {
       lines.push(`  ${question}: ${stability}${choice}`);
       const p = probabilities('baseline probabilities:', baseline.meanProbabilities); if (p) lines.push(`    ${p}`);
     }
-    for (const m of c.mutations) for (const [question, result] of Object.entries(m.comparisons)) {
-      lines.push(`  ${question} ${m.mutation.type}: ${result.verdict.toLowerCase()} (${result.reason})`);
-      lines.push(`    confirmed: mutated ${result.reproduced}/${result.observations}`);
+    for (const m of c.mutations) {
+      if (Object.keys(m.comparisons).length === 0) {
+        lines.push(`  ${m.mutation.type} / ${m.mutation.strategy}: INCONCLUSIVE (unfinished; ${m.responses.length} responses)`);
+      }
+      for (const [question, result] of Object.entries(m.comparisons)) {
+      lines.push(`  ${question} ${m.mutation.type} / ${m.mutation.strategy}: ${result.verdict} (${result.reason})`);
+      if (result.mutated.modalChoice !== undefined) lines.push(`    mutated decision: ${result.mutated.modalChoice}`);
+      if (result.mutated.mean !== undefined) lines.push(`    mutated mean: ${result.mutated.mean.toFixed(3)}; delta: ${(result.mutated.mean - result.baseline.mean!).toFixed(3)}`);
+      if (result.verdict === 'FAIL' || result.reason === 'WARN_FLAKY_MUTATION') {
+        const base = result.baseline;
+        const support = base.modalChoice !== undefined ? `${Math.round((base.agreementRatio ?? 0) * base.runs)}/${base.runs} ${base.modalChoice}` : `${base.runs} runs; mean ${base.mean!.toFixed(3)}, range ${base.range!.toFixed(3)}`;
+        lines.push(`    ${result.verdict === 'FAIL' ? 'confirmed' : 'confirmation incomplete or flaky'}: baseline ${support}`);
+        lines.push(`      mutated ${result.reproduced}/${result.observations}${result.mutated.modalChoice === undefined ? ` ${result.reason}` : ` ${result.mutated.modalChoice}`}`);
+      }
       const p = probabilities('mutated probabilities:', result.mutated.meanProbabilities); if (p) lines.push(`    ${p}`);
+      if (result.verdict === 'FAIL') {
+        failureSequence++;
+        if (artifacts.savePayloads === false) lines.push('    replay unavailable: REPLAY_UNAVAILABLE_NO_PAYLOADS');
+        else if (artifacts.directory) {
+          const file = join(artifacts.directory, 'failures', `F${String(failureSequence).padStart(3, '0')}.json`);
+          lines.push(`    artifact: ${file}`, `    replay: jevfuzz replay '${file.replaceAll("'", "'\\''")}'${artifacts.replayProvider === 'cloudflare' ? ' --provider cloudflare' : ''}`);
+        }
+      }
+      }
     }
   }
-  lines.push('', `${report.summary.mutations} mutations`, `PASS: ${report.summary.pass}`, `WARN: ${report.summary.warn}`, `FAIL: ${report.summary.fail}`, `INCONCLUSIVE: ${report.summary.inconclusive}`, `${report.summary.logicalRequests} requests`, `HTTP attempts: ${report.summary.httpAttempts} (retries: ${Math.max(0, report.summary.httpAttempts - report.summary.logicalRequests)})`, `input tokens: ${report.summary.usage.inputTokens}`, `output tokens: ${report.summary.usage.outputTokens}`);
+  lines.push('', `${report.summary.mutations} mutations${report.run.status === 'incomplete' ? ' planned; run incomplete' : ''}`, `PASS: ${report.summary.pass}`, `WARN: ${report.summary.warn}`, `FAIL: ${report.summary.fail}`, `INCONCLUSIVE: ${report.summary.inconclusive}`, `${report.summary.logicalRequests} requests`, `HTTP attempts: ${report.summary.httpAttempts} (retries: ${report.summary.httpRetries ?? 'unavailable'})`, `input tokens: ${report.summary.usage.inputTokens}`, `output tokens: ${report.summary.usage.outputTokens}`);
   return lines.join('\n');
 }
 
@@ -130,7 +151,7 @@ function validateArtifact(value: unknown): FailureArtifact {
   integer(artifact.baselineRuns, 'artifact baseline runs', 2); integer(artifact.confirmRuns, 'artifact confirm runs', 2);
   assert(record(artifact.idMap) && Object.entries(artifact.idMap).every(([mutated, original]) => typeof mutated === 'string' && typeof original === 'string'), 'invalid artifact question map');
   assert(Object.keys(artifact.idMap).every(question => Object.hasOwn(artifact.mutatedRequest.questions, question)), 'artifact question map has unknown mutated question');
-  const effectiveMap = Object.fromEntries(Object.keys(artifact.mutatedRequest.questions).map(question => [question, artifact.idMap[question] ?? question]));
+  const effectiveMap = Object.fromEntries(Object.keys(artifact.mutatedRequest.questions).map(question => [question, Object.hasOwn(artifact.idMap, question) ? artifact.idMap[question]! : question]));
   const originals = Object.values(effectiveMap);
   assert(Object.keys(artifact.mutatedRequest.questions).length === Object.keys(artifact.baselineRequest.questions).length && new Set(originals).size === originals.length && originals.every(question => Object.hasOwn(artifact.baselineRequest.questions, question)), 'artifact question map must be a full bijection');
   assert(Object.hasOwn(artifact.baselineRequest.questions, artifact.questionId), 'artifact question is absent from baseline request');
@@ -165,9 +186,14 @@ export async function replay(rawArtifact: FailureArtifact, provider: DecisionPro
   const seed = input.seed ?? artifact.seed;
   const config: FuzzConfig = { version: 1, name: `replay-${artifact.runId}`, cases: [{ id: artifact.caseId, request: artifact.baselineRequest, baselineRuns, mutations: { builtin: false, unorderedArrays: [], irrelevantFields: [], prosePaths: [] }, invariants }] };
   const prepared: Mutation[][] = [[{ recipe: artifact.mutation, request: artifact.mutatedRequest, idMap: artifact.idMap }]];
-  const report = await run(config, provider, { ...input, seed, baselineRuns, confirmRuns }, prepared);
-  report.run.mode = 'replay'; report.run.replayOf = artifact.runId;
-  return report;
+  try {
+    const report = await run(config, provider, { ...input, seed, baselineRuns, confirmRuns }, prepared);
+    report.run.mode = 'replay'; report.run.replayOf = artifact.runId;
+    return report;
+  } catch (error) {
+    if (error instanceof RunInterruptedError) { error.report.run.mode = 'replay'; error.report.run.replayOf = artifact.runId; }
+    throw error;
+  }
 }
 
 /** Import Jev Intent Review JSONL requests, discarding all historical responses. */
@@ -177,7 +203,7 @@ export async function importTrace(file: string, outDir: string): Promise<string[
   const configs: { id: string; config: FuzzConfig }[] = lines.map((line, index) => {
     let trace: unknown;
     try { trace = JSON.parse(line); } catch { throw new FuzzError('CONFIG', `invalid trace JSONL line ${index + 1}`); }
-    assert(record(trace) && trace.version === 1 && trace.source === 'jev-intent-review' && Object.hasOwn(trace, 'request'), `invalid trace line ${index + 1}`);
+    assert(record(trace) && trace.version === 1 && trace.source === 'jev-intent-review' && Object.hasOwn(trace, 'request') && typeof trace.timestamp === 'string' && Number.isFinite(Date.parse(trace.timestamp)) && record(trace.response), `invalid trace line ${index + 1}`);
     const id = `intent-review-${String(index + 1).padStart(4, '0')}`;
     return { id, config: parseConfig({ version: 1, name: id, cases: [{ id, request: trace.request }] }, `${id}.jevfuzz.json`) };
   });

@@ -17,6 +17,7 @@ export interface JevResponse {
 export interface DecisionProvider {
   readonly mode?: 'live' | 'fake';
   readonly httpAttempts?: number;
+  readonly httpRetries?: number;
   evaluate(request: JevRequest, options?: { signal?: AbortSignal }): Promise<JevResponse>;
 }
 export interface Thresholds {
@@ -68,12 +69,12 @@ export interface MutationResult {
 export interface CaseReport {
   id: string; caseHash: string; baselineRequestHash: string; baselineRequest?: JevRequest;
   baselineResponses: JevResponse[]; baseline: Record<string, BaselineStats>;
-  invariants: Record<string, Invariant>; mutations: MutationResult[];
+  invariants: Record<string, Invariant>; thresholds: Record<string, Thresholds>; mutations: MutationResult[];
 }
 export interface RunSummary {
   cases: number; questions: number; mutations: number;
   pass: number; warn: number; fail: number; inconclusive: number;
-  logicalRequests: number; httpAttempts: number;
+  logicalRequests: number; httpAttempts: number; httpRetries?: number;
   usage: { inputTokens: number; outputTokens: number };
 }
 export interface FuzzReport {
@@ -84,6 +85,8 @@ export interface FuzzReport {
     requestedModels: string[]; observedModel?: string; observedModels: string[];
     modelChanged: boolean; configHash: string;
     options: Omit<RunOptions, 'signal'>; replayOf?: string;
+    status: 'complete' | 'incomplete';
+    error?: { code: string; message: string };
   };
   summary: RunSummary; cases: CaseReport[];
 }

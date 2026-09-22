@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseConfig } from '../src/config.ts';
 import { FakeProvider } from '../src/provider.ts';
-import { run, options, plan, exitCode } from '../src/runner.ts';
-import type { DecisionProvider, JevRequest, JevResponse } from '../src/types.ts';
+import { run, options, plan, exitCode, RunInterruptedError } from '../src/runner.ts';
+import type { DecisionProvider, JevRequest, JevResponse, Mutation } from '../src/types.ts';
 
 const config = () => parseConfig({ state: { b: 'evidence', a: 'other' }, model: 'jev-latest', questions: {
   q: { type: 'choice', instructions: 'choose', criteria: { a: 'A', b: 'B', c: 'C' } },
@@ -80,6 +80,115 @@ test('baseline stays sequential, workers obey concurrency, cancellation stops qu
 test('zero mutations cannot masquerade as a reliable verdict', async () => {
   const c = config(); c.cases[0]!.mutations.builtin = false;
   const report = await run(c, new FakeProvider()); assert.equal(exitCode(report), 3);
+});
+
+function criterionOrderMutation(c: ReturnType<typeof config>, criteria: string[]): Mutation {
+  const request = structuredClone(c.cases[0]!.request);
+  const question = request.questions.q!;
+  if (question.type !== 'choice') throw new Error('fixture expected a choice question');
+  question.criteria = Object.fromEntries(criteria.map(key => [key, question.criteria[key]!])) as typeof question.criteria;
+  return { recipe: { type: 'choice_criteria_order', strategy: 'test', seed: 1, question: 'q' }, request, idMap: {} };
+}
+
+test('interrupted second baseline retains its first validated response', async () => {
+  let calls = 0;
+  const provider: DecisionProvider = { async evaluate(request) {
+    calls++;
+    if (calls === 2) return Promise.reject(undefined);
+    return answer(request, 'a');
+  } };
+  await assert.rejects(run(config(), provider, { seed: 42 }), (error: unknown) => {
+    assert.ok(error instanceof RunInterruptedError);
+    assert.equal(error.report.run.status, 'incomplete');
+    assert.deepEqual(error.report.run.error, { code: 'RUN_INTERRUPTED', message: 'run interrupted' });
+    assert.equal(error.report.cases[0]!.baselineResponses.length, 1);
+    assert.equal(error.report.cases[0]!.thresholds.n!.noulThreshold, 0.5);
+    assert.equal(error.report.cases[0]!.thresholds.q!.scoreDelta, 0.5);
+    assert.ok(error.report.cases[0]!.mutations.every(m => m.responses.length === 0 && Object.keys(m.comparisons).length === 0));
+    return true;
+  });
+  assert.equal(calls, 2);
+});
+
+test('an interrupted third baseline retains two responses but remains incomplete', async () => {
+  let calls = 0;
+  const provider: DecisionProvider = { async evaluate(request) {
+    calls++;
+    if (calls === 3) return Promise.reject(undefined);
+    return answer(request, 'a');
+  } };
+  await assert.rejects(run(config(), provider, { seed: 42 }), (error: unknown) => {
+    assert.ok(error instanceof RunInterruptedError);
+    assert.equal(error.report.run.status, 'incomplete');
+    assert.equal(error.report.cases[0]!.baselineResponses.length, 2);
+    assert.equal(error.report.summary.fail, 0);
+    assert.equal(Object.keys(error.report.cases[0]!.mutations[0]!.comparisons).length, 0);
+    return true;
+  });
+});
+
+test('interrupted confirmation retains validated mutation responses without a false FAIL', async () => {
+  const c = config();
+  const mutation = criterionOrderMutation(c, ['b', 'a', 'c']);
+  let calls = 0;
+  const provider: DecisionProvider = { async evaluate(request) {
+    calls++;
+    if (calls === 5) throw new Error('sensitive provider response body');
+    const q = request.questions.q!;
+    return answer(request, q.type === 'choice' ? Object.keys(q.criteria)[0]! : 'a');
+  } };
+  await assert.rejects(run(c, provider, { seed: 42, concurrency: 1 }, [[mutation]]), (error: unknown) => {
+    assert.ok(error instanceof RunInterruptedError);
+    const result = error.report.cases[0]!.mutations[0]!;
+    assert.equal(result.responses.length, 1);
+    assert.equal(result.comparisons.q!.verdict, 'INCONCLUSIVE');
+    assert.notEqual(result.comparisons.q!.verdict, 'FAIL');
+    return true;
+  });
+});
+
+test('workers drain validated in-flight responses after abort and do not dequeue more work', async () => {
+  const c = config();
+  const mutation = criterionOrderMutation(c, ['b', 'a', 'c']);
+  const mutations = [mutation, structuredClone(mutation), structuredClone(mutation)];
+  let calls = 0;
+  const provider: DecisionProvider = { async evaluate(request) {
+    calls++;
+    if (calls === 4) throw new Error('first worker failed');
+    if (calls === 5) await new Promise(resolve => setTimeout(resolve, 15));
+    return answer(request, 'a');
+  } };
+  await assert.rejects(run(c, provider, { seed: 42, concurrency: 2 }, [mutations]), (error: unknown) => {
+    assert.ok(error instanceof RunInterruptedError);
+    const results = error.report.cases[0]!.mutations;
+    assert.equal(results[1]!.responses.length, 1);
+    assert.equal(results[2]!.responses.length, 0);
+    return true;
+  });
+  assert.equal(calls, 5);
+});
+
+test('a pre-aborted signal returns an incomplete report without provider calls', async () => {
+  const controller = new AbortController(); controller.abort(new Error('do not persist this reason'));
+  let calls = 0;
+  const provider: DecisionProvider = { async evaluate(request) { calls++; return answer(request, 'a'); } };
+  await assert.rejects(run(config(), provider, { signal: controller.signal }), (error: unknown) => {
+    assert.ok(error instanceof RunInterruptedError);
+    assert.equal(error.report.run.status, 'incomplete');
+    assert.equal(error.report.run.error?.code, 'PROVIDER_ABORTED');
+    assert.equal(error.report.summary.logicalRequests, 0);
+    return true;
+  });
+  assert.equal(calls, 0);
+});
+
+test('exit codes preserve incomplete, warning-only, and inconclusive semantics', async () => {
+  const base = await run(config(), new FakeProvider(), { seed: 42 });
+  const report = (summary: Partial<typeof base.summary>, status: 'complete' | 'incomplete' = 'complete') => ({ ...base, run: { ...base.run, status }, summary: { ...base.summary, ...summary } });
+  assert.equal(exitCode(report({ pass: 0, warn: 2, fail: 0, inconclusive: 0 })), 0);
+  assert.equal(exitCode(report({ pass: 0, warn: 1, fail: 0, inconclusive: 1 })), 3);
+  assert.equal(exitCode(report({ pass: 1, warn: 0, fail: 0, inconclusive: 1 })), 0);
+  assert.equal(exitCode(report({ pass: 1, warn: 0, fail: 0, inconclusive: 0 }, 'incomplete')), 2);
 });
 
 test('protocol identifiers named __proto__ remain own data properties', async () => {

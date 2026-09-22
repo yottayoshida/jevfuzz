@@ -134,21 +134,29 @@ export function compare(baselineAnswers: JevAnswer[], mutatedAnswers: JevAnswer[
   };
   if (!baseline.stable) return { ...base, verdict: 'INCONCLUSIVE', reason: 'INCONCLUSIVE_BASELINE_UNSTABLE', warnings: [] };
 
-  const firstFailure = failureFor(mutatedAnswers[0]!, baseline, limits);
-  if (firstFailure) {
-    const matches = mutatedAnswers.filter(answer => failureFor(answer, baseline, limits)?.signature === firstFailure.signature).length;
-    if (!confirmed) return { ...base, verdict: 'FAIL', reason: firstFailure.reason, warnings: [], reproduced: matches, delta: firstFailure.delta };
-    const required = Math.ceil(mutatedAnswers.length * 2 / 3);
-    const combined = failureFor(
-      type === 'choice' ? ({ ...mutatedAnswers[0]!, choice: mutated.modalChoice! } as JevAnswer)
-        : type === 'noul' ? ({ type: 'noul', noul: mutated.mean! } as JevAnswer)
-          : ({ ...mutatedAnswers[0]!, score: mutated.mean! } as JevAnswer),
-      baseline, limits,
-    );
-    if (mutatedAnswers.length >= 3 && matches >= required && combined?.signature === firstFailure.signature) {
-      return { ...base, verdict: 'FAIL', reason: firstFailure.reason, warnings: [], reproduced: matches, delta: combined.delta ?? firstFailure.delta };
+  const failures = mutatedAnswers.map(answer => failureFor(answer, baseline, limits));
+  const firstFailure = failures[0];
+  if (!confirmed && firstFailure) {
+    const matches = failures.filter(failure => failure?.signature === firstFailure.signature).length;
+    return { ...base, verdict: 'FAIL', reason: firstFailure.reason, warnings: [], reproduced: matches, delta: firstFailure.delta };
+  }
+  if (confirmed) {
+    const counts = new Map<string, { failure: Failure; matches: number }>();
+    for (const failure of failures) {
+      if (!failure) continue;
+      const current = counts.get(failure.signature);
+      if (current) current.matches++;
+      else counts.set(failure.signature, { failure, matches: 1 });
     }
-    return { ...base, verdict: 'WARN', reason: 'WARN_FLAKY_MUTATION', warnings: ['WARN_FLAKY_MUTATION'], reproduced: matches, delta: firstFailure.delta };
+    const required = Math.ceil(mutatedAnswers.length * 2 / 3);
+    const reproduced = [...counts.values()].find(candidate => mutatedAnswers.length >= 3 && candidate.matches >= required);
+    if (reproduced) {
+      return { ...base, verdict: 'FAIL', reason: reproduced.failure.reason, warnings: [], reproduced: reproduced.matches, delta: reproduced.failure.delta };
+    }
+    if (firstFailure) {
+      const matches = counts.get(firstFailure.signature)!.matches;
+      return { ...base, verdict: 'WARN', reason: 'WARN_FLAKY_MUTATION', warnings: ['WARN_FLAKY_MUTATION'], reproduced: matches, delta: firstFailure.delta };
+    }
   }
   const soft = softResult(baseline, mutated, limits);
   return { ...base, verdict: soft.warnings.length ? 'WARN' : 'PASS', ...soft };

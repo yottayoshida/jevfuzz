@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, symlink } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -58,5 +58,50 @@ test('installed bin symlink dispatches the actual CLI', async () => {
     const result = spawnSync(process.execPath, [target, 'plan', 'fixtures/live-smoke.jevfuzz.json', '--seed', '42', '--json'], { encoding: 'utf8' });
     assert.equal(result.status, 0);
     assert.equal(JSON.parse(result.stdout).worstCaseRequests, 12);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('doctor enforces the declared Node minor version without network', async () => {
+  const original = Object.getOwnPropertyDescriptor(process.versions, 'node')!;
+  try {
+    const io = { env: {}, provider: new FakeProvider(), stdout: () => {}, stderr: () => {} };
+    for (const [version, expected] of [['22.17.0', 2], ['22.18.0', 0], ['24.0.0', 0]] as const) {
+      Object.defineProperty(process.versions, 'node', { ...original, value: version });
+      assert.equal(await main(['doctor'], io), expected, version);
+    }
+  } finally { Object.defineProperty(process.versions, 'node', original); }
+});
+
+test('runtime failure saves a private incomplete report with completed evidence', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'jevfuzz-interrupted-'));
+  try {
+    let calls = 0, stdout = '', stderr = '';
+    const fake = new FakeProvider();
+    const provider = { httpAttempts: 0, httpRetries: 0, async evaluate(r: Parameters<typeof fake.evaluate>[0]) {
+      this.httpAttempts++; if (++calls === 2) throw new Error('private-server-error'); return fake.evaluate(r);
+    } };
+    const code = await main(['run', 'fixtures/live-smoke.jevfuzz.json', '--artifacts-dir', directory, '--json'], { env: {}, provider, stdout: s => stdout += s, stderr: s => stderr += s });
+    assert.equal(code, 2);
+    const report = JSON.parse(stdout);
+    assert.equal(report.run.status, 'incomplete');
+    assert.equal(report.cases[0].baselineResponses.length, 1);
+    assert.equal(report.summary.httpAttempts, 2);
+    const manifest = JSON.parse(await readFile(join(directory, 'runs', report.run.id, 'manifest.json'), 'utf8'));
+    assert.equal(manifest.complete, false);
+    assert.doesNotMatch(stdout + stderr, /private-server-error/);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('trimmed credentials in inputs never reach report files or output', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'jevfuzz-secret-'));
+  try {
+    const file = join(directory, 'input.json');
+    await writeFile(file, JSON.stringify({ state: 'secret-to-filter', model: 'jev-latest', questions: { q: { type: 'noul', instructions: 'x' } } }));
+    let output = '';
+    const artifacts = join(directory, 'artifacts');
+    const code = await main(['run', file, '--artifacts-dir', artifacts, '--json'], { env: { TYPESAFE_API_KEY: '  secret-to-filter  ' }, provider: new FakeProvider(), stdout: s => output += s, stderr: s => output += s });
+    assert.equal(code, 2);
+    assert.doesNotMatch(output, /secret-to-filter/);
+    await assert.rejects(readdir(artifacts));
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
