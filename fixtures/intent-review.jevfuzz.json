@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "name": "intent-review-propagation-manually-constructed",
+  "model": "jev-latest",
+  "cases": [{
+    "id": "unchanged-caller-001",
+    "request": {
+      "state": {
+        "requirement": "If loading an existing configuration fails, return an error to the caller.",
+        "call": { "caller": "open_config", "callee": "load_config", "behavior": "the returned error is converted into success" }
+      },
+      "questions": {
+        "requirement_relation": {
+          "type": "choice", "instructions": "How does this call relate to the requirement?",
+          "criteria": { "worth_checking": "The call may violate the requirement.", "not_required": "The requirement does not apply to this call.", "settled": "The evidence already establishes compliance." }
+        }
+      }
+    }
+  }]
+}

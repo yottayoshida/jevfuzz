@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "name": "live-smoke",
+  "model": "jev-latest",
+  "cases": [{
+    "id": "sky-blue",
+    "request": {
+      "state": "The sky is blue.",
+      "questions": {
+        "blue": { "type": "noul", "instructions": "Is the sky described as blue?" },
+        "color": { "type": "choice", "instructions": "What color is the sky described as?", "criteria": { "blue": "Blue", "red": "Red" } }
+      }
+    }
+  }]
+}

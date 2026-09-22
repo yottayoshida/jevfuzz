@@ -1,0 +1,20 @@
+{
+  "name": "jevfuzz",
+  "version": "0.1.0",
+  "description": "Metamorphic stability testing for Jev decision functions",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22.18.0" },
+  "bin": { "jevfuzz": "dist/cli/main.js" },
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist", "README.md", "LICENSE", "fixtures"],
+  "repository": { "type": "git", "url": "git+https://github.com/yottayoshida/jevfuzz.git" },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test test/*.test.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "test:live": "node scripts/live-smoke.ts",
+    "prepack": "npm run build"
+  },
+  "devDependencies": { "@types/node": "^22.19.0", "typescript": "^7.0.2" }
+}

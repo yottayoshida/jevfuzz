@@ -1,0 +1,297 @@
+import type { DecisionProvider, JevAnswer, JevRequest, JevResponse } from './types.ts';
+import { FuzzError, record, rng } from './util.ts';
+
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+const DEFAULT_TYPESAFE_HOST = 'https://api.typesafe.ai';
+const DEFAULT_TYPESAFE_PATH = '/v1/systemone';
+const CLOUDFLARE_MODEL = 'typesafe/jev';
+const MAX_ATTEMPTS = 5;
+
+export interface ProviderOptions {
+  fetch?: typeof fetch;
+  sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  timeoutMs?: number;
+  maxAttempts?: number;
+  jitterSeed?: number;
+}
+
+type Environment = Readonly<Record<string, string | undefined>>;
+
+function providerError(code: string, message: string): FuzzError {
+  return new FuzzError(code, message);
+}
+
+function responseError(): FuzzError {
+  return providerError('PROVIDER_RESPONSE', 'invalid provider response');
+}
+
+function missingModelError(): FuzzError {
+  return providerError('PROVIDER_RESPONSE', 'provider response is missing the actual model version');
+}
+
+function finiteUnit(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
+function probabilities(value: unknown, expectedKeys?: readonly string[]): Record<string, number> | null {
+  if (!record(value)) return null;
+  const keys = Object.keys(value);
+  if (expectedKeys && (keys.length !== expectedKeys.length || expectedKeys.some((key) => !Object.hasOwn(value, key)))) return null;
+  let total = 0;
+  for (const entry of Object.values(value)) {
+    if (!finiteUnit(entry)) return null;
+    total += entry;
+  }
+  return Math.abs(total - 1) <= 0.000_001 ? value as Record<string, number> : null;
+}
+
+function validAnswer(value: unknown, question: JevRequest['questions'][string]): value is JevAnswer {
+  if (!record(value) || value.type !== question.type) return false;
+  if (question.type === 'noul') return finiteUnit(value.noul);
+  if (!finiteUnit(value.confidence)) return false;
+  if (question.type === 'choice') {
+    const keys = Object.keys(question.criteria);
+    return typeof value.choice === 'string' && Object.hasOwn(question.criteria, value.choice)
+      && probabilities(value.probabilities, keys) !== null;
+  }
+  const keys = question.criteria.map((_, index) => String(index));
+  return typeof value.score === 'number' && Number.isFinite(value.score)
+    && value.score >= 0 && value.score <= question.criteria.length - 1
+    && probabilities(value.probabilities, keys) !== null && record(value.legend);
+}
+
+/** Validates the complete Jev response against both the public response schema and its request. */
+export function validateResponse(raw: unknown, request: JevRequest): JevResponse {
+  if (!record(raw)) throw responseError();
+  if (typeof raw.model !== 'string' || raw.model.trim() === '') throw missingModelError();
+  if (!record(raw.answers) || !record(raw.usage)) throw responseError();
+  const answers = raw.answers;
+  const usage = raw.usage;
+  const questionIds = Object.keys(request.questions);
+  const answerIds = Object.keys(raw.answers);
+  if (answerIds.length !== questionIds.length || questionIds.some((id) => !Object.hasOwn(answers, id))) throw responseError();
+  for (const id of questionIds) if (!validAnswer(answers[id], request.questions[id]!)) throw responseError();
+  const { input_tokens: inputTokens, output_tokens: outputTokens } = usage;
+  if (typeof inputTokens !== 'number' || !Number.isSafeInteger(inputTokens) || inputTokens < 0
+    || typeof outputTokens !== 'number' || !Number.isSafeInteger(outputTokens) || outputTokens < 0) throw responseError();
+  const normalizedAnswers: Record<string, JevAnswer> = {};
+  for (const id of questionIds) {
+    const answer = answers[id] as Record<string, unknown>;
+    const question = request.questions[id]!;
+    if (question.type === 'noul') normalizedAnswers[id] = { type: 'noul', noul: answer.noul as number };
+    else if (question.type === 'choice') normalizedAnswers[id] = {
+      type: 'choice', choice: answer.choice as string,
+      probabilities: { ...(answer.probabilities as Record<string, number>) }, confidence: answer.confidence as number,
+    };
+    else normalizedAnswers[id] = {
+      type: 'score', score: answer.score as number,
+      probabilities: { ...(answer.probabilities as Record<string, number>) }, confidence: answer.confidence as number,
+      legend: structuredClone(answer.legend) as Record<string, import('./types.ts').Json>,
+    };
+  }
+  return { model: raw.model, answers: normalizedAnswers, usage: { input_tokens: inputTokens, output_tokens: outputTokens } };
+}
+
+function environmentValue(env: Environment, key: string): string {
+  const value = env[key]?.trim();
+  if (!value) throw providerError('PROVIDER_CONFIG', `missing ${key}`);
+  return value;
+}
+
+function tokenValue(env: Environment, key: string): string {
+  const raw = env[key];
+  if (raw === undefined || raw.trim() === '') throw providerError('PROVIDER_CONFIG', `missing ${key}`);
+  const token = raw;
+  if (/\s/.test(token)) throw providerError('PROVIDER_CONFIG', `invalid ${key}`);
+  return token;
+}
+
+function safeOrigin(raw: string): URL {
+  const source = raw.includes('://') ? raw : `https://${raw}`;
+  let url: URL;
+  try { url = new URL(source); } catch { throw providerError('PROVIDER_CONFIG', 'invalid API host'); }
+  if (url.username || url.password || url.search || url.hash || (url.pathname !== '/' && url.pathname !== '')) {
+    throw providerError('PROVIDER_CONFIG', 'invalid API host');
+  }
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname))) {
+    throw providerError('PROVIDER_CONFIG', 'API host must use HTTPS');
+  }
+  return url;
+}
+
+function safePath(raw: string | undefined): string {
+  const path = raw?.trim() || DEFAULT_TYPESAFE_PATH;
+  if (!path.startsWith('/') || path.startsWith('//') || path.includes('?') || path.includes('#') || /[\\\r\n]/.test(path)) {
+    throw providerError('PROVIDER_CONFIG', 'invalid API path');
+  }
+  return path;
+}
+
+function typesafeUrl(env: Environment): string {
+  const origin = safeOrigin(env.JEV_API_HOST?.trim() || DEFAULT_TYPESAFE_HOST);
+  const path = safePath(env.JEV_API_PATH);
+  const url = new URL(path, origin);
+  if (url.origin !== origin.origin) throw providerError('PROVIDER_CONFIG', 'API path must remain on the configured origin');
+  return url.toString();
+}
+
+function cloudflareUrl(env: Environment): string {
+  const accountId = environmentValue(env, 'CLOUDFLARE_ACCOUNT_ID');
+  if (!/^[0-9a-f]{32}$/i.test(accountId)) throw providerError('PROVIDER_CONFIG', 'invalid CLOUDFLARE_ACCOUNT_ID');
+  return `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run`;
+}
+
+function abortError(signal: AbortSignal): unknown {
+  return signal.reason instanceof Error ? signal.reason : providerError('PROVIDER_ABORTED', 'provider request was aborted');
+}
+
+async function realSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) throw abortError(signal);
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(done, ms);
+    function done(): void { signal?.removeEventListener('abort', cancelled); resolve(); }
+    function cancelled(): void { clearTimeout(timer); reject(abortError(signal!)); }
+    signal?.addEventListener('abort', cancelled, { once: true });
+  });
+}
+
+function retryAfter(response: Response): number | undefined {
+  const value = response.headers.get('retry-after');
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, 30_000);
+  const date = Date.parse(value);
+  return Number.isFinite(date) ? Math.min(Math.max(0, date - Date.now()), 30_000) : undefined;
+}
+
+abstract class HttpProvider implements DecisionProvider {
+  readonly mode = 'live' as const;
+  #httpAttempts = 0;
+  get httpAttempts(): number { return this.#httpAttempts; }
+  readonly #fetch: typeof fetch;
+  readonly #sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
+  readonly #timeoutMs: number;
+  readonly #maxAttempts: number;
+  readonly #random: () => number;
+  readonly #url: string;
+  readonly #token: string;
+
+  protected constructor(url: string, token: string, options: ProviderOptions = {}) {
+    if (!Number.isSafeInteger(options.timeoutMs ?? 20_000) || (options.timeoutMs ?? 20_000) <= 0) throw providerError('PROVIDER_CONFIG', 'invalid timeout');
+    const maxAttempts = options.maxAttempts ?? MAX_ATTEMPTS;
+    if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > MAX_ATTEMPTS) throw providerError('PROVIDER_CONFIG', 'maxAttempts must be between 1 and 5');
+    this.#url = url; this.#token = token; this.#fetch = options.fetch ?? fetch;
+    this.#sleep = options.sleep ?? realSleep; this.#timeoutMs = options.timeoutMs ?? 20_000;
+    this.#maxAttempts = maxAttempts; this.#random = rng(options.jitterSeed ?? 0x4a455646);
+  }
+
+  protected abstract body(request: JevRequest): unknown;
+  protected abstract unpack(raw: unknown): unknown;
+
+  async evaluate(request: JevRequest, options: { signal?: AbortSignal } = {}): Promise<JevResponse> {
+    const payload = JSON.stringify(this.body(request));
+    for (let attempt = 1; attempt <= this.#maxAttempts; attempt++) {
+      if (options.signal?.aborted) throw abortError(options.signal);
+      const timeout = AbortSignal.timeout(this.#timeoutMs);
+      const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+      try {
+        this.#httpAttempts++;
+        const response = await this.#fetch(this.#url, {
+          method: 'POST', headers: { Authorization: `Bearer ${this.#token}`, 'Content-Type': 'application/json' },
+          body: payload, redirect: 'manual', signal,
+        });
+        if (response.status >= 300 && response.status < 400) throw providerError('PROVIDER_HTTP', 'provider rejected a redirect');
+        if ((response.status === 429 || response.status === 529) && attempt < this.#maxAttempts) {
+          await response.body?.cancel();
+          await this.wait(retryAfter(response), attempt, options.signal);
+          continue;
+        }
+        if (!response.ok) throw providerError('PROVIDER_HTTP', `provider request failed with HTTP ${response.status}`);
+        let raw: unknown;
+        try { raw = await response.json(); }
+        catch (error) {
+          if (signal.aborted || !(error instanceof SyntaxError)) throw error;
+          throw responseError();
+        }
+        const normalized = validateResponse(this.unpack(raw), request);
+        if (JSON.stringify(normalized).includes(this.#token)) throw providerError('PROVIDER_RESPONSE', 'provider response contains a credential');
+        return normalized;
+      } catch (error) {
+        if (options.signal?.aborted) throw abortError(options.signal);
+        if (error instanceof FuzzError) throw error;
+        const timedOut = timeout.aborted;
+        if (attempt < this.#maxAttempts) {
+          await this.wait(undefined, attempt, options.signal);
+          continue;
+        }
+        throw providerError(timedOut ? 'PROVIDER_TIMEOUT' : 'PROVIDER_NETWORK', timedOut ? 'provider request timed out' : 'provider network request failed');
+      }
+    }
+    throw providerError('PROVIDER_NETWORK', 'provider network request failed');
+  }
+
+  async wait(retryAfterMs: number | undefined, attempt: number, signal?: AbortSignal): Promise<void> {
+    const base = 250 * 2 ** (attempt - 1);
+    const jittered = Math.round(base * (0.8 + this.#random() * 0.4));
+    await this.#sleep(retryAfterMs ?? jittered, signal);
+  }
+}
+
+/** Live TypeSafe System One provider. Its API key remains private to this instance. */
+export class TypeSafeProvider extends HttpProvider {
+  constructor(env: Environment = process.env, options: ProviderOptions = {}) { super(typesafeUrl(env), tokenValue(env, 'TYPESAFE_API_KEY'), options); }
+  protected body(request: JevRequest): unknown { return request; }
+  protected unpack(raw: unknown): unknown { return raw; }
+}
+
+function cloudflareResult(raw: unknown): unknown {
+  // Workers AI has returned both `result: { answers }` and a completed-job envelope
+  // with a second `result`. Preserve only response metadata that actually arrived.
+  let node: unknown = raw;
+  let model: unknown;
+  let answers: unknown;
+  let usage: unknown;
+  for (let depth = 0; depth < 4 && record(node); depth++) {
+    if (typeof node.model === 'string') model = node.model;
+    if (record(node.answers)) answers = node.answers;
+    if (record(node.usage)) usage = node.usage;
+    node = node.result;
+  }
+  return { model, answers, usage };
+}
+
+/** Minimal Workers AI adapter, kept separate because its wire format is not TypeSafe System One's. */
+export class CloudflareProvider extends HttpProvider {
+  constructor(env: Environment = process.env, options: ProviderOptions = {}) { super(cloudflareUrl(env), tokenValue(env, 'CLOUDFLARE_API_TOKEN'), options); }
+  protected body(request: JevRequest): unknown {
+    // Workers AI exposes this provider as a fixed model. v0.1 accepts only its
+    // canonical name and the TypeSafe latest alias, then maps either to that name.
+    if (request.model !== 'jev-latest' && request.model !== CLOUDFLARE_MODEL) throw providerError('PROVIDER_REQUEST', 'CloudflareProvider supports only jev-latest or typesafe/jev');
+    return { model: CLOUDFLARE_MODEL, input: { state: request.state, questions: request.questions } };
+  }
+  protected unpack(raw: unknown): unknown { return cloudflareResult(raw); }
+}
+
+function defaultResponse(request: JevRequest): JevResponse {
+  const answers: Record<string, JevAnswer> = {};
+  for (const [id, question] of Object.entries(request.questions)) {
+    if (question.type === 'choice') {
+      const choices = Object.keys(question.criteria).sort((left, right) => left < right ? -1 : left > right ? 1 : 0); const choice = choices[0] ?? '';
+      answers[id] = { type: 'choice', choice, probabilities: Object.fromEntries(choices.map((key) => [key, key === choice ? 1 : 0])), confidence: 1 };
+    } else if (question.type === 'noul') answers[id] = { type: 'noul', noul: 0.5 };
+    else {
+      const keys = question.criteria.map((_, index) => String(index));
+      answers[id] = { type: 'score', score: 0, probabilities: Object.fromEntries(keys.map((key) => [key, key === '0' ? 1 : 0])), confidence: 1, legend: Object.fromEntries(question.criteria.map((value, index) => [String(index), value])) };
+    }
+  }
+  return { model: 'fake-jev-1', answers, usage: { input_tokens: 0, output_tokens: 0 } };
+}
+
+/** Offline-only provider. It never becomes a fallback for a failed live request. */
+export class FakeProvider implements DecisionProvider {
+  readonly mode = 'fake' as const;
+  #index = 0;
+  readonly #handler: (request: JevRequest, index: number) => JevResponse;
+  constructor(handler: (request: JevRequest, index: number) => JevResponse = defaultResponse) { this.#handler = handler; }
+  async evaluate(request: JevRequest): Promise<JevResponse> { return validateResponse(this.#handler(request, this.#index++), request); }
+}
