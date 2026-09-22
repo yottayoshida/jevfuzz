@@ -127,8 +127,13 @@ test('TypeSafeProvider retries when response body reading times out', async () =
       } as unknown as Response;
     },
   });
-  assert.deepEqual(await provider.evaluate(request), response);
-  assert.equal(calls, 2);
+  // AbortSignal.timeout is unref'ed. A real fetch owns a socket; this fake must
+  // keep the event loop alive while Node 22 waits for its abort signal.
+  const keepAlive = setInterval(() => {}, 1000);
+  try {
+    assert.deepEqual(await provider.evaluate(request), response);
+    assert.equal(calls, 2);
+  } finally { clearInterval(keepAlive); }
 });
 
 test('CloudflareProvider uses the fixed Jev endpoint and refuses missing observed model metadata', async () => {
