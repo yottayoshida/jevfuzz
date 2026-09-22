@@ -31,8 +31,11 @@ was available. This is the approved provider exception, not a fake fallback.
 
 The current-main trace integration is submitted separately as
 [jev-intent-review PR #56](https://github.com/yottayoshida/jev-intent-review/pull/56)
-at f247dd0. Its six focused tests, typecheck and build passed; the full local
-suite passed 339 tests with zero failures/skips. The PR is not merged.
+at 4c01722. Its seven focused tests, typecheck and build passed. After a
+Darwin-only path normalization correction, both Node 22 and 24 CI jobs passed
+all 340 tests with zero skips, and the audit job passed:
+[current trace CI](https://github.com/yottayoshida/jev-intent-review/actions/runs/35717625924).
+The PR is not merged.
 
 Concrete request types follow the current [official API](https://docs.typesafe.ai/api)
 as §35 requires: structured instructions, nullable Choice descriptions, and
