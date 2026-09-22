@@ -3,6 +3,9 @@ import test from 'node:test';
 import { EvaluationBroker } from '../src/engine/broker.ts';
 import { BudgetLedger } from '../src/engine/budget.ts';
 import { FakeProvider, TypeSafeProvider } from '../src/provider.ts';
+import { run } from '../src/runner.ts';
+import { parseConfig } from '../src/config.ts';
+import type { DecisionProvider } from '../src/types.ts';
 
 const payload = JSON.stringify({ state: {}, model: 'jev-latest', questions: { q: { type: 'noul', instructions: 'x' } } });
 const response = { model: 'jev-1', answers: { q: { type: 'noul', noul: .5 } }, usage: { input_tokens: 1, output_tokens: 2 } };
@@ -14,6 +17,31 @@ test('strict broker supports deterministic fake adapters without HTTP accounting
   assert.equal(observation.cache, 'unknown');
   assert.equal(broker.observations.length, 1);
   assert.equal(ledger.snapshot().http.consumedKnown, 0);
+});
+
+test('strict broker rejects custom live adapters that deny HTTP accounting', () => {
+  const fake = new FakeProvider();
+  const custom: DecisionProvider = { mode: 'live', capabilities: { ...fake.capabilities }, evaluate: async () => { throw new Error('must not dispatch'); } };
+  assert.throws(() => new EvaluationBroker(custom, budget(), { strict: true }), /attempt hooks/);
+});
+
+test('legacy production run reserves discovery, confirmation and every retry through the ledger', async () => {
+  const reservations: { phase: string; kind: string }[] = [];
+  const original = BudgetLedger.prototype.reserve;
+  BudgetLedger.prototype.reserve = function (phase, kind, id) { reservations.push({ phase, kind }); return original.call(this, phase, kind, id); };
+  try {
+    const provider = new TypeSafeProvider({ TYPESAFE_API_KEY: 'synthetic' }, { fetch: async (_url, init) => {
+      const req = JSON.parse(String(init?.body));
+      const answers = Object.fromEntries(Object.entries(req.questions as Record<string, { criteria: Record<string, string> }>).map(([id, q]) => { const labels = Object.keys(q.criteria); return [id, { type: 'choice', choice: labels[0], confidence: 1, probabilities: Object.fromEntries(labels.map(label => [label, label === labels[0] ? 1 : 0])) }]; }));
+      return new Response(JSON.stringify({ model: 'test-v1', answers, usage: { input_tokens: 0, output_tokens: 0 } }));
+    } });
+    const config = parseConfig({ state: {}, model: 'jev-latest', questions: { q: { type: 'choice', instructions: 'x', criteria: { a: 'a', b: 'b' } } } });
+    const report = await run(config, provider, { seed: 42, maxRequests: 100 });
+    assert.equal(report.summary.fail > 0, true);
+    assert.equal(reservations.filter(r => r.kind === 'logical').length, report.summary.logicalRequests);
+    assert.equal(reservations.filter(r => r.kind === 'http').length, provider.httpAttempts);
+    assert.equal(reservations.some(r => r.phase === 'confirmation'), true);
+  } finally { BudgetLedger.prototype.reserve = original; }
 });
 
 test('broker journals durable reservation before dispatch and charges every retry', async () => {

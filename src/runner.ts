@@ -4,6 +4,8 @@ import { generateMutations } from './mutate.ts';
 import { compare, summarize } from './compare.ts';
 import { thresholds } from './config.ts';
 import { EvaluationBroker } from './engine/broker.ts';
+import { BudgetLedger } from './engine/budget.ts';
+import type { Phase } from './campaign-types.ts';
 import { assert, freshSeed, hash, integer, FuzzError } from './util.ts';
 
 const SAFE_ERROR_CODES = new Set(['BUDGET', 'CONFIG', 'PROVIDER_ABORTED', 'PROVIDER_CONFIG', 'PROVIDER_HTTP', 'PROVIDER_NETWORK', 'PROVIDER_REQUEST', 'PROVIDER_RESPONSE', 'PROVIDER_TIMEOUT']);
@@ -68,12 +70,15 @@ export async function run(config: FuzzConfig, provider: DecisionProvider, input:
     })),
   };
   const controller = new AbortController(), signal = opts.signal ? AbortSignal.any([opts.signal, controller.signal]) : controller.signal;
-  const broker = new EvaluationBroker(provider, undefined, { signal, strict: false });
-  const evaluate = async (request: JevRequest): Promise<JevResponse> => {
+  const ledger = new BudgetLedger({ logicalRequests: opts.maxRequests, httpAttempts: opts.maxRequests * 5, wallTimeSeconds: 86_400,
+    discoveryRequests: budget.baselineRequests + budget.mutationRequests, confirmationRequests: budget.maximumConfirmationRequests,
+    shrinkRequests: 0, finalConfirmationRequests: 0 });
+  const broker = new EvaluationBroker(provider, ledger, { signal, strict: false });
+  const evaluate = async (request: JevRequest, phase: Phase = 'discovery'): Promise<JevResponse> => {
     signal.throwIfAborted();
     if (report.summary.logicalRequests >= opts.maxRequests) throw new FuzzError('BUDGET', 'logical request limit reached');
     report.summary.logicalRequests++;
-    const response = (await broker.evaluate(JSON.stringify(request), 'discovery')).response;
+    const response = (await broker.evaluate(JSON.stringify(request), phase)).response;
     if (report.run.observedModel === undefined) report.run.observedModel = response.model;
     if (!report.run.observedModels.includes(response.model)) report.run.observedModels.push(response.model);
     if (report.run.observedModel !== response.model) report.run.modelChanged = true;
@@ -96,7 +101,7 @@ export async function run(config: FuzzConfig, provider: DecisionProvider, input:
             mutationReport.responses.push(await evaluate(mutation.request));
             const mapped = (response: JevResponse, question: string) => response.answers[Object.entries(mutation.idMap).find(([, original]) => original === question)?.[0] ?? question]!;
             const initial = Object.fromEntries(Object.keys(c.request.questions).map(question => [question, compare(caseReport.baselineResponses.map(response => response.answers[question]!), mutationReport.responses.map(response => mapped(response, question)), invariant(question), false)])) as Record<string, Comparison>;
-            if (!report.run.modelChanged && Object.values(initial).some(result => result.verdict === 'FAIL')) for (let confirmation = 0; confirmation < opts.confirmRuns; confirmation++) mutationReport.responses.push(await evaluate(mutation.request));
+            if (!report.run.modelChanged && Object.values(initial).some(result => result.verdict === 'FAIL')) for (let confirmation = 0; confirmation < opts.confirmRuns; confirmation++) mutationReport.responses.push(await evaluate(mutation.request, 'confirmation'));
           } catch (error) {
             if (!firstWorkerErrorCaptured) { firstWorkerError = error; firstWorkerErrorCaptured = true; }
             controller.abort();
