@@ -42,7 +42,12 @@ function probabilities(value: unknown, expectedKeys?: readonly string[]): Record
     if (!finiteUnit(entry)) return null;
     total += entry;
   }
-  return Math.abs(total - 1) <= 0.000_001 ? value as Record<string, number> : null;
+  // Live Jev 1.13.0 returns probabilities rounded to two decimal places.
+  // Their sum can be 0.99 or 1.01. Accept only the implied rounding interval;
+  // retain every raw value rather than rewriting the provider's distribution.
+  const rounded = Object.values(value).every(entry => Math.abs((entry as number) * 100 - Math.round((entry as number) * 100)) < 1e-9);
+  const tolerance = rounded ? keys.length * 0.005 + 1e-9 : 0.000_001;
+  return total > 0 && Math.abs(total - 1) <= tolerance ? value as Record<string, number> : null;
 }
 
 function validAnswer(value: unknown, question: JevRequest['questions'][string]): value is JevAnswer {

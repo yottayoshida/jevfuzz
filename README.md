@@ -130,6 +130,10 @@ Choice/Score JS divergence (base 2) at least 0.15, confidence drop at least 0.30
 and nonflipping Noul shift at least 0.20 produce warnings. Confidence is not
 correctness. All raw probabilities remain available in full reports.
 
+Live Jev responses can round probabilities to two decimals so their sum is 0.99
+or 1.01. Validation accepts the implied rounding interval and preserves raw
+values; only the JS-divergence calculation normalizes distributions.
+
 Per-question `invariants` supports `type` (`choice_stable`, `noul_stable`,
 `score_stable`) and these threshold fields: `noulBaselineRange`,
 `scoreBaselineRange`, `noulThreshold`, `noulMinDelta`, `scoreDelta`, `jsDivergence`,

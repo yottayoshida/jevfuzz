@@ -2,6 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { CloudflareProvider, FakeProvider, TypeSafeProvider, validateResponse } from '../src/provider.ts';
+
+test('live rounded probabilities retain raw values within their quantization bound', () => {
+  const r: JevRequest = { state: 'public fixture', model: 'jev-latest', questions: { q: { type: 'choice', instructions: 'choose', criteria: { a: 'a', b: 'b', c: 'c', d: 'd', e: 'e' } } } };
+  const raw = { model: 'jev-1.13.0', usage: { input_tokens: 1, output_tokens: 1 }, answers: { q: { type: 'choice', choice: 'b', confidence: .61, probabilities: { a: .01, b: .68, c: .02, d: .14, e: .14 } } } };
+  assert.deepEqual(validateResponse(raw, r).answers.q, raw.answers.q);
+  assert.throws(() => validateResponse({ ...raw, answers: { q: { ...raw.answers.q, probabilities: { a: .01, b: .5, c: .02, d: .14, e: .14 } } } }, r));
+});
 import type { JevRequest, JevResponse } from '../src/types.ts';
 
 const request: JevRequest = {
