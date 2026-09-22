@@ -81,3 +81,13 @@ test('zero mutations cannot masquerade as a reliable verdict', async () => {
   const c = config(); c.cases[0]!.mutations.builtin = false;
   const report = await run(c, new FakeProvider()); assert.equal(exitCode(report), 3);
 });
+
+test('protocol identifiers named __proto__ remain own data properties', async () => {
+  const input = JSON.parse('{"state":"x","model":"jev-latest","questions":{"__proto__":{"type":"choice","instructions":"choose","criteria":{"__proto__":"first","other":"second"}}}}');
+  input.questions.constructor = structuredClone(input.questions.__proto__);
+  const c = parseConfig(input);
+  const result = await run(c, new FakeProvider(), { seed: 42 });
+  assert.equal(result.summary.fail, 0);
+  assert.ok(Object.hasOwn(result.cases[0]!.baseline, '__proto__'));
+  assert.ok(Object.hasOwn(result.cases[0]!.baseline.__proto__!.meanProbabilities!, '__proto__'));
+});

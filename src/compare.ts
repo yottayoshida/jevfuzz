@@ -22,16 +22,16 @@ function requireAnswers(answers: JevAnswer[], minimum: number): JevAnswer['type'
 
 function probabilityStats(answers: Extract<JevAnswer, { probabilities: Record<string, number> }>[]): Pick<BaselineStats, 'meanProbabilities' | 'minProbabilities' | 'maxProbabilities'> {
   const labels = [...new Set(answers.flatMap(answer => Object.keys(answer.probabilities)))];
-  const meanProbabilities: Record<string, number> = {};
-  const minProbabilities: Record<string, number> = {};
-  const maxProbabilities: Record<string, number> = {};
+  const meanProbabilities: Record<string, number> = Object.create(null);
+  const minProbabilities: Record<string, number> = Object.create(null);
+  const maxProbabilities: Record<string, number> = Object.create(null);
   for (const label of labels) {
     const values = answers.map(answer => answer.probabilities[label] ?? 0);
     meanProbabilities[label] = values.reduce((total, value) => total + value, 0) / values.length;
     minProbabilities[label] = Math.min(...values);
     maxProbabilities[label] = Math.max(...values);
   }
-  return { meanProbabilities, minProbabilities, maxProbabilities };
+  return { meanProbabilities: Object.fromEntries(Object.entries(meanProbabilities)), minProbabilities: Object.fromEntries(Object.entries(minProbabilities)), maxProbabilities: Object.fromEntries(Object.entries(maxProbabilities)) };
 }
 
 /** Summarize one typed answer population using the configured stability bounds. */

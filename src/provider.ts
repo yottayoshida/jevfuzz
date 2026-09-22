@@ -79,7 +79,7 @@ export function validateResponse(raw: unknown, request: JevRequest): JevResponse
   const { input_tokens: inputTokens, output_tokens: outputTokens } = usage;
   if (typeof inputTokens !== 'number' || !Number.isSafeInteger(inputTokens) || inputTokens < 0
     || typeof outputTokens !== 'number' || !Number.isSafeInteger(outputTokens) || outputTokens < 0) throw responseError();
-  const normalizedAnswers: Record<string, JevAnswer> = {};
+  const normalizedAnswers: Record<string, JevAnswer> = Object.create(null);
   for (const id of questionIds) {
     const answer = answers[id] as Record<string, unknown>;
     const question = request.questions[id]!;
@@ -94,7 +94,7 @@ export function validateResponse(raw: unknown, request: JevRequest): JevResponse
       legend: structuredClone(answer.legend) as Record<string, import('./types.ts').Json>,
     };
   }
-  return { model: raw.model, answers: normalizedAnswers, usage: { input_tokens: inputTokens, output_tokens: outputTokens } };
+  return { model: raw.model, answers: Object.fromEntries(Object.entries(normalizedAnswers)), usage: { input_tokens: inputTokens, output_tokens: outputTokens } };
 }
 
 function environmentValue(env: Environment, key: string): string {
@@ -278,7 +278,7 @@ export class CloudflareProvider extends HttpProvider {
 }
 
 function defaultResponse(request: JevRequest): JevResponse {
-  const answers: Record<string, JevAnswer> = {};
+  const answers: Record<string, JevAnswer> = Object.create(null);
   for (const [id, question] of Object.entries(request.questions)) {
     if (question.type === 'choice') {
       const choices = Object.keys(question.criteria).sort((left, right) => left < right ? -1 : left > right ? 1 : 0); const choice = choices[0] ?? '';

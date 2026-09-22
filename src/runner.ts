@@ -63,11 +63,12 @@ export async function run(config: FuzzConfig, provider: DecisionProvider, input:
   try {
     for (let caseIndex = 0; caseIndex < config.cases.length; caseIndex++) {
       const c = config.cases[caseIndex]!;
+      const invariant = (question: string) => Object.hasOwn(c.invariants, question) ? c.invariants[question] : undefined;
       const baselineResponses: JevResponse[] = [];
       for (let i = 0; i < (opts.baselineRuns ?? c.baselineRuns); i++) baselineResponses.push(await evaluate(c.request));
       const caseReport: CaseReport = {
         id: c.id, caseHash: hash(c), baselineRequestHash: hash(c.request), baselineRequest: c.request,
-        baselineResponses, baseline: Object.fromEntries(Object.keys(c.request.questions).map(q => [q, summarize(baselineResponses.map(r => r.answers[q]!), c.invariants[q])])),
+        baselineResponses, baseline: Object.fromEntries(Object.keys(c.request.questions).map(q => [q, summarize(baselineResponses.map(r => r.answers[q]!), invariant(q))])),
         invariants: c.invariants, mutations: [],
       };
       report.cases.push(caseReport);
@@ -82,7 +83,7 @@ export async function run(config: FuzzConfig, provider: DecisionProvider, input:
             const renamed = Object.entries(m.idMap).find(([, original]) => original === q)?.[0] ?? q;
             return response.answers[renamed]!;
           };
-          const comparisons = () => Object.fromEntries(Object.keys(c.request.questions).map(q => [q, compare(baselineResponses.map(r => r.answers[q]!), responses.map(r => mapped(r, q)), c.invariants[q], responses.length > 1)]));
+          const comparisons = () => Object.fromEntries(Object.keys(c.request.questions).map(q => [q, compare(baselineResponses.map(r => r.answers[q]!), responses.map(r => mapped(r, q)), invariant(q), responses.length > 1)]));
           let results = comparisons();
           if (!report.run.modelChanged && Object.values(results).some(r => r.verdict === 'FAIL')) {
             for (let i = 0; i < opts.confirmRuns; i++) responses.push(await evaluate(m.request));
