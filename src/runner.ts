@@ -3,7 +3,7 @@ import type { CaseReport, Comparison, DecisionProvider, FuzzConfig, FuzzReport, 
 import { generateMutations } from './mutate.ts';
 import { compare, summarize } from './compare.ts';
 import { thresholds } from './config.ts';
-import { validateResponse } from './provider.ts';
+import { EvaluationBroker } from './engine/broker.ts';
 import { assert, freshSeed, hash, integer, FuzzError } from './util.ts';
 
 const SAFE_ERROR_CODES = new Set(['BUDGET', 'CONFIG', 'PROVIDER_ABORTED', 'PROVIDER_CONFIG', 'PROVIDER_HTTP', 'PROVIDER_NETWORK', 'PROVIDER_REQUEST', 'PROVIDER_RESPONSE', 'PROVIDER_TIMEOUT']);
@@ -68,11 +68,12 @@ export async function run(config: FuzzConfig, provider: DecisionProvider, input:
     })),
   };
   const controller = new AbortController(), signal = opts.signal ? AbortSignal.any([opts.signal, controller.signal]) : controller.signal;
+  const broker = new EvaluationBroker(provider, undefined, { signal, strict: false });
   const evaluate = async (request: JevRequest): Promise<JevResponse> => {
     signal.throwIfAborted();
     if (report.summary.logicalRequests >= opts.maxRequests) throw new FuzzError('BUDGET', 'logical request limit reached');
     report.summary.logicalRequests++;
-    const response = validateResponse(await provider.evaluate(structuredClone(request), { signal }), request);
+    const response = (await broker.evaluate(JSON.stringify(request), 'discovery')).response;
     if (report.run.observedModel === undefined) report.run.observedModel = response.model;
     if (!report.run.observedModels.includes(response.model)) report.run.observedModels.push(response.model);
     if (report.run.observedModel !== response.model) report.run.modelChanged = true;

@@ -217,8 +217,10 @@ test('TypeSafeProvider retries when response body reading times out', async () =
       calls++;
       if (calls > 1) return json(response);
       return {
-        status: 200, ok: true, headers: new Headers(), body: null,
-        json: () => new Promise((_, reject) => (init!.signal as AbortSignal).addEventListener('abort', () => reject(new DOMException('timed out', 'AbortError')), { once: true })),
+        status: 200, ok: true, headers: new Headers(),
+        body: new ReadableStream<Uint8Array>({ start(controller) {
+          (init!.signal as AbortSignal).addEventListener('abort', () => controller.error(new DOMException('timed out', 'AbortError')), { once: true });
+        } }),
       } as unknown as Response;
     },
   });

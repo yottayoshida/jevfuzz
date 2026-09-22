@@ -14,11 +14,26 @@ export interface JevResponse {
   answers: Record<string, JevAnswer>;
   usage: { input_tokens: number; output_tokens: number };
 }
+export interface ProviderCapabilities {
+  adapterId: string; adapterVersion: string;
+  observedModel: boolean; probabilities: boolean; confidence: boolean; usage: boolean;
+  httpAccounting: boolean; byteReplay: boolean; cancellation: boolean; cacheMetadata: boolean;
+  attemptHooks?: boolean;
+}
+export interface ProviderAttempt { attemptId: string; transportPayload: string; attempt: number }
+export interface ProviderAttemptSettlement extends ProviderAttempt { outcome: 'known' | 'unknown' }
+export interface EvaluateOptions {
+  signal?: AbortSignal; payload?: string;
+  beforeAttempt?: (attempt: ProviderAttempt) => void | Promise<void>;
+  settledAttempt?: (attempt: ProviderAttemptSettlement) => void | Promise<void>;
+  observedMetadata?: (metadata: { cache: 'unknown' | 'fresh' | 'cached' }) => void | Promise<void>;
+}
 export interface DecisionProvider {
   readonly mode?: 'live' | 'fake';
   readonly httpAttempts?: number;
   readonly httpRetries?: number;
-  evaluate(request: JevRequest, options?: { signal?: AbortSignal }): Promise<JevResponse>;
+  readonly capabilities?: ProviderCapabilities;
+  evaluate(request: JevRequest, options?: EvaluateOptions): Promise<JevResponse>;
 }
 export interface Thresholds {
   noulBaselineRange: number; scoreBaselineRange: number;
