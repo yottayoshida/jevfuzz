@@ -35,7 +35,7 @@ at 4c01722. Its seven focused tests, typecheck and build passed. After a
 Darwin-only path normalization correction, both Node 22 and 24 CI jobs passed
 all 340 tests with zero skips, and the audit job passed:
 [current trace CI](https://github.com/yottayoshida/jev-intent-review/actions/runs/35717625924).
-The PR is not merged.
+PR #56 was merged on 2026-09-22 as 5e89f846, preserving its commit ancestry.
 
 Concrete request types follow the current [official API](https://docs.typesafe.ai/api)
 as §35 requires: structured instructions, nullable Choice descriptions, and
