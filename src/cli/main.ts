@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
-import { globSync } from 'node:fs';
+import { globSync, realpathSync } from 'node:fs';
 import { loadConfig } from '../config.ts';
 import { TypeSafeProvider, CloudflareProvider } from '../provider.ts';
 import { exitCode, options, plan, run } from '../runner.ts';
@@ -106,7 +106,7 @@ export async function main(argv: string[], supplied: Partial<CliIO> = {}): Promi
     return 2;
   }
 }
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const controller = new AbortController();
   const cancel = () => controller.abort();
   process.once('SIGINT', cancel); process.once('SIGTERM', cancel);

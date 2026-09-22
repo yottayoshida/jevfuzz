@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -48,4 +48,15 @@ test('mutation bytes reproduce in separate processes', () => {
 test('production CLI dispatch has no network dependency for help/plan', () => {
   const result = spawnSync(process.execPath, ['src/cli/main.ts', 'plan', 'fixtures/live-smoke.jevfuzz.json', '--seed', '42', '--json'], { encoding: 'utf8', env: { PATH: process.env.PATH } });
   assert.equal(result.status, 0); assert.equal(JSON.parse(result.stdout).worstCaseRequests, 12);
+});
+
+test('installed bin symlink dispatches the actual CLI', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'jevfuzz-bin-'));
+  try {
+    const target = join(directory, 'jevfuzz');
+    await symlink(join(process.cwd(), 'src/cli/main.ts'), target);
+    const result = spawnSync(process.execPath, [target, 'plan', 'fixtures/live-smoke.jevfuzz.json', '--seed', '42', '--json'], { encoding: 'utf8' });
+    assert.equal(result.status, 0);
+    assert.equal(JSON.parse(result.stdout).worstCaseRequests, 12);
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });
