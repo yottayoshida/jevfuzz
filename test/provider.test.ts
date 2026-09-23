@@ -261,6 +261,45 @@ test('CloudflareProvider uses the fixed Jev endpoint and refuses missing observe
   await assert.rejects(invalidModel.evaluate({ ...request, model: 'jev-1.13.0' }), /supports only jev-latest or typesafe\/jev/i);
 });
 
+test('CloudflareProvider sends the gateway skip-cache header on every retry', async () => {
+  const calls: RequestInit[] = [];
+  const provider = new CloudflareProvider({ CLOUDFLARE_ACCOUNT_ID: 'c'.repeat(32), CLOUDFLARE_API_TOKEN: 'cf-secret' }, {
+    fetch: async (_input, init) => {
+      calls.push(init!);
+      return calls.length < 3 ? json({}, 529) : json({ result: response });
+    },
+    sleep: async () => {},
+  });
+  assert.deepEqual(await provider.evaluate(request), response);
+  assert.equal(calls.length, 3);
+  for (const call of calls) assert.equal(new Headers(call.headers).get('cf-aig-skip-cache'), 'true');
+});
+
+test('CloudflareProvider records only an explicit cache HIT and TypeSafe remains unknown', async () => {
+  for (const [header, expected] of [
+    ['  hIt  ', 'cached'],
+    ['MISS', 'unknown'],
+    ['BYPASS', 'unknown'],
+    [undefined, 'unknown'],
+  ] as const) {
+    const metadata: string[] = [];
+    const provider = new CloudflareProvider({ CLOUDFLARE_ACCOUNT_ID: 'd'.repeat(32), CLOUDFLARE_API_TOKEN: 'cf-secret' }, {
+      fetch: async () => json({ result: response }, 200, header === undefined ? undefined : { 'cf-aig-cache-status': header }),
+    });
+    assert.equal(provider.capabilities.cacheMetadata, false);
+    await provider.evaluate(request, { observedMetadata: async ({ cache }) => { metadata.push(cache); } });
+    assert.deepEqual(metadata, [expected]);
+  }
+
+  const metadata: string[] = [];
+  const provider = new TypeSafeProvider({ TYPESAFE_API_KEY: 'private-key' }, {
+    fetch: async () => json(response, 200, { 'cf-aig-cache-status': 'HIT' }),
+  });
+  assert.equal(provider.capabilities.cacheMetadata, false);
+  await provider.evaluate(request, { observedMetadata: async ({ cache }) => { metadata.push(cache); } });
+  assert.deepEqual(metadata, ['unknown']);
+});
+
 test('FakeProvider is deterministic by default and supports an injected handler', async () => {
   const fake = new FakeProvider();
   assert.deepEqual(await fake.evaluate(request), await fake.evaluate(request));

@@ -1,36 +1,33 @@
 # JevFuzz
 
-> Find the input that changes the decision. Shrink it. Keep it.
+**Find the input that changes the decision. Shrink it. Keep it.**
 
-JevFuzz tests Jev decision functions with reproducible input transformations.
-It confirms suspected contract violations with new observations, shrinks the
-input pair, and keeps it as a regression test.
+JevFuzz finds small input changes that break your Jev decision contracts.
+Confirm the violation with new calls, shrink the counterexample, and keep it as a regression test.
 
-**Judgment stability, not factual correctness.** A confirmed FAIL breaks a
-declared relation. PASS describes the observations made; it does not prove the
-answer correct.
+![Recorded Cloudflare Jev finding: changing only JSON key order flips unrelated to may_violate; the counterexample shrinks from three moved key positions to two and is saved to a regression corpus.](docs/assets/readme-demo.svg)
 
-Current package: **v0.2.0**. External field validation remains pending.
+An actual Cloudflare Jev finding, confirmed with 24 new calls after shrinking.
+The input is synthetic; the API results are real. [Evidence and SVG source](docs/readme-demo.md).
 
 ## Start
 
-From source. Node **22.18+**. No runtime dependencies.
+Run in your repository with [GitHub Actions](docs/github-actions.md):
 
-```sh
-git clone https://github.com/yottayoshida/jevfuzz.git
-cd jevfuzz
-npm ci
-npm run build
-alias jevfuzz='node dist/cli/main.js'
-export CLOUDFLARE_ACCOUNT_ID=...
-export CLOUDFLARE_API_TOKEN=...
-jevfuzz plan fixtures/v2/routing.campaign.json
-jevfuzz fuzz fixtures/v2/routing.campaign.json
+```yaml
+- uses: yottayoshida/jevfuzz@2b29d83f99814dc95644646b7721f5d12dd25695
+  with:
+    command: fuzz
+    target: .jevfuzz/campaign.json
+    provider: cloudflare
+  env:
+    CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 ```
 
-The example uses Cloudflare Jev. TypeSafe is also supported.
-`plan` makes zero API calls and shows separate request, retry, confirmation,
-and shrink budgets.
+Copy the [campaign](examples/github-actions/campaign.json) and
+[complete workflow](examples/github-actions/jevfuzz.yml) to get started.
+TypeSafe is supported with `TYPESAFE_API_KEY`. [CLI setup](docs/github-actions.md#cli-setup).
 
 ## Keep a counterexample
 
@@ -42,16 +39,15 @@ jevfuzz check .jevfuzz/corpus
 jevfuzz report smaller.json --format html --out smaller.html
 ```
 
-Choice, Noul, Score, and declarative production policies are supported.
-Uniform search is the default; feedback search remains experimental.
-Version 1 `run`, configs, reports, and failure replay remain supported.
+Supports Choice, Noul, Score, and production policies. Uniform search is the
+default; [feedback benchmarks](docs/benchmark-feedback-v4-results.md) and v1 compatibility are documented.
 
-Artifacts stay local with private permissions. Full artifacts contain prompts
-and source data; redacted and hash-only modes are not replayable.
-No telemetry or automatic uploads.
+A FAIL breaks a declared relation; it does not establish factual correctness.
+Your run artifacts stay local by default and contain inputs and responses. No telemetry.
+The bundled demo uses the public synthetic evidence linked above.
 
 [CLI and migration](docs/v09-migration.md) ·
 [Provider evidence](docs/provider-conformance.md) ·
-[Benchmark protocol](docs/benchmark-v09.md) ·
-[Offline demo](docs/demo-v09.md) ·
 [Implementation status](docs/v09-implementation.md) · [MIT](LICENSE)
+
+Current CLI release: **v0.2.0**. The action is available at the pinned commit above.

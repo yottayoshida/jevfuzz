@@ -9,8 +9,15 @@ Design authority: the JevFuzz v1 product policy, detailed design, roadmap,
 benchmark plan, and evidence notes, dated 2026-09-22.
 Baseline: released v0.1.0, commit `c027851a25f8000a6368e9f11cae5209d3ddd2b9`.
 The released compatibility snapshot is retained in `fixtures/compat-v01`.
-Current local tests: 172 passed, zero failed/skipped on Node 22.18.0, 24.0.0,
-and 26.7.0 (2026-09-23). See the verification record below.
+Released v0.2.0 verification: 172 passed, zero failed/skipped on Node 22.18.0,
+24.0.0, and 26.7.0 (2026-09-23). See the historical record below. Subsequent
+local scheduler/provider work passed 185 source tests on Node 22.18.0 and
+26.7.0. The subsequent comparison, corpus-oracle, and policy-template fixes
+passed 208 source tests on both runtimes, with zero failures or skips. These
+changes are local and unreleased; the package version remains `0.2.0`.
+The [provider record](provider-conformance.md#dual-provider-readiness-verification--2026-09-23)
+documents the installed CLI verification of both provider paths and the
+additional Cloudflare live smoke.
 
 ## Slices and acceptance properties
 
@@ -82,12 +89,20 @@ and bounded Cloudflare experiments when credentials are available. Credentials
 are never persisted. Offline adapter checks and live observations are recorded
 separately.
 
-## Local verification record
+## Historical v0.2.0 release verification
+
+The [published v0.2.0 release](https://github.com/yottayoshida/jevfuzz/releases/tag/v0.2.0)
+was rechecked through the GitHub API on 2026-09-23: target commit
+`a92a4e41b1cc2cf0c3fae7d12f622f0a91f6b21a`, published at
+`2026-09-23T06:26:58Z`. Its `jevfuzz-0.2.0.tgz` asset has SHA-256
+`bce4aba04c5a8a40c523355d6847d88a8768dcc399a7ec0f160abbded0bb7aaf`.
+The table below describes that historical verification, not the subsequent
+unreleased worktree or its newly packed artifacts.
 
 The source and package checks below are local, including the offline HTTP-adapter package test.
 Fresh Cloudflare release observations are recorded separately in
 [provider conformance](provider-conformance.md#v020-cloudflare-live-verification--2026-09-23).
-No mandatory test is skipped. The current suite includes actual child-process
+No mandatory test was skipped. That suite includes actual child-process
 SIGKILL recovery, corpus quota exhaustion with zero further dispatch, strict
 artifact imports, provider identity, fixed-stat integer reference cases, and
 independent fresh final shrink confirmation.
@@ -138,6 +153,10 @@ reviews are local evidence, not GitHub reviews.
   passed (138 logical / HTTP calls), including fresh replay, an actual permutation
   reduction, and a corpus regression check. TypeSafe-direct live behavior and
   cache freshness remain unverified; fixed-stat is refused for both HTTP adapters.
+  Direct TypeSafe live validation is deferred by the owner; a direct key is not
+  a prerequisite for implementation. The owner also chose to continue without
+  a provider inquiry. Neither decision changes the unresolved statistical or
+  field-acceptance evidence.
 ## Local benchmark evidence
 
 M04-07/M09-06 local simulator acceptance passed: 6,000 trials (12 families ×
@@ -153,6 +172,13 @@ censoring. Original measurement code and summaries are retained, and corrected
 analysis binds their hashes. This historical run cannot promote feedback;
 no family met the 25% threshold in the corrected comparison anyway. Uniform
 remains the default. `benchmark-v09.md` records commands and limitations.
+
+A fresh v4 measurement now passes the unchanged feedback promotion criteria:
+four families exceed 25% median confirmed-call improvement, and pooled
+detection increases from 67.43% to 71.86%. All 6,000 trials and supplemental
+acceptance checks passed. See [the v4 results](benchmark-feedback-v4-results.md)
+for every detectable family, source provenance, and remaining limits. This
+does not close live statistical evidence or external field acceptance.
 ## Distribution
 
 Release artifacts and publication status are recorded in

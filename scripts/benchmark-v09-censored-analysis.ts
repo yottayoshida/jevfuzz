@@ -45,11 +45,13 @@ export function correctCensoredAnalysis(rows: Row[], previous: any, postHoc = tr
 export function validateDerivedRows(rows: any[], manifest: any, summary: any, sourceHash: string): void {
   const strategies: string[] = summary.runtime.strategies === 1 ? ['uniform'] : manifest.strategies;
   const expected = new Map<string, string>();
-  for (let seed = 0; seed < summary.runtime.seeds; seed++) for (const family of manifest.families) for (const strategy of strategies) expected.set(`${seed}/${family.id}/${strategy}`, family.expect);
+  const seedStart = summary.runtime.seedStart ?? 0;
+  const protocolVersion = summary.version ?? 3;
+  for (let offset = 0; offset < summary.runtime.seeds; offset++) for (const family of manifest.families) for (const strategy of strategies) expected.set(`${seedStart + offset}/${family.id}/${strategy}`, family.expect);
   const seen = new Set<string>();
   for (const row of rows) {
     const key = `${row.seed}/${row.family}/${row.strategy}`, fail = (reason: string): never => { throw new Error(`invalid derived measurement row ${key}: ${reason}`); };
-    if (!expected.has(key) || seen.has(key) || expected.get(key) !== row.expected || row.version !== 3 || row.sourceHash !== sourceHash) fail('tuple, expectation, or source identity');
+    if (!expected.has(key) || seen.has(key) || expected.get(key) !== row.expected || row.version !== protocolVersion || row.sourceHash !== sourceHash) fail('tuple, expectation, or source identity');
     seen.add(key);
     const integer = (value: unknown) => Number.isSafeInteger(value) && Number(value) >= 0;
     if (!integer(row.logicalCalls) || row.logicalCalls > manifest.full.logicalRequests || !integer(row.httpAttempts) || row.httpAttempts > manifest.full.httpAttempts) fail('budget bounds');

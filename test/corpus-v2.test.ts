@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test, { after } from 'node:test';
-import { addToCorpus, checkCorpus, initializeCorpus, inspectCorpus, triageCorpus } from '../src/corpus/index.ts';
+import { addToCorpus, checkCorpus, corpusFindings, initializeCorpus, inspectCorpus, prepareCorpusCheck, triageCorpus } from '../src/corpus/index.ts';
 import { readJson, writePrivate } from '../src/storage.ts';
 import { ExecutionJournal } from '../src/engine/journal.ts';
 import { buildCandidate } from '../src/mutators/index.ts';
@@ -17,14 +17,15 @@ const root = await mkdtemp(join(tmpdir(), 'jevfuzz-corpus-'));
 after(() => rm(root, { recursive: true, force: true }));
 const contract: Contract = { id: 'route', question: 'route', relation: 'invariant', projection: 'choice', mutations: ['question_id_rename'], admissibility: 'structural', assumptions: [], required: true };
 const oracle = { profile: 'paired-v1' as const, pairs: 1, minimumSupport: 1, maxControlViolationRate: 0, minimumEffect: 0, alpha: .05, originalSlots: 0, shrinkSlots: 0 };
-function provider(model = 'sim') { return new FakeProvider((request) => { const id = Object.keys(request.questions)[0]!, choice = id === 'route' ? 'billing' : 'general'; return { model, answers: { [id]: { type: 'choice', choice, probabilities: { billing: choice === 'billing' ? 1 : 0, general: choice === 'general' ? 1 : 0 }, confidence: 1 } }, usage: { input_tokens: 0, output_tokens: 0 } }; }); }
-async function finding(): Promise<Finding> { const seed = { id: 's', mutations: { builtin: true, unorderedArrays: [], irrelevantFields: [], prosePaths: [] }, request: { model: 'jev-latest', state: {}, questions: { route: { type: 'choice' as const, instructions: 'x', criteria: { billing: 'b', general: 'g' } } } } }; const candidate = buildCandidate(seed, [{ operator: 'question_id_rename', version: '1', admissibility: 'structural', renames: { route: 'r' }, reads: [], writes: [], requires: [], invalidates: [] }], [contract]); let n=0; const execute={modelChanged:false,async evaluate(payload:string,phase:Phase):Promise<Observation>{const request=JSON.parse(payload), id=Object.keys(request.questions)[0]!, choice=id==='route'?'billing':'general', response:JevResponse={model:'sim',answers:{[id]:{type:'choice',choice,probabilities:{billing:choice==='billing'?1:0,general:choice==='general'?1:0},confidence:1}},usage:{input_tokens:0,output_tokens:0}};n++;return{id:`o${n}`,operationId:`p${n}`,phase,wireHash:createHash('sha256').update(payload).digest('hex'),response,provider:'fake',observedModel:'sim',cache:'fresh'};}}; const signature='["relation-v1","route","route","invariant","choice","label","billing","general"]'; const confirmation=await confirmCandidate(candidate,contract,execute,oracle,{signature,seed:1}); return createFinding(candidate,contract,oracle,confirmation,{provider:'custom',reducers:{independentQuestions:false,optionalStatePaths:[],unorderedArrayPaths:[],prosePaths:[]}}); }
+function provider(model = 'sim', onEvaluate?: () => void) { return new FakeProvider((request) => { onEvaluate?.(); const id = Object.keys(request.questions)[0]!, choice = id === 'route' ? 'billing' : 'general'; return { model, answers: { [id]: { type: 'choice', choice, probabilities: { billing: choice === 'billing' ? 1 : 0, general: choice === 'general' ? 1 : 0 }, confidence: 1 } }, usage: { input_tokens: 0, output_tokens: 0 } }; }); }
+async function finding(model='jev-latest', sourceProvider: Finding['provider']='custom'): Promise<Finding> { const seed = { id: 's', mutations: { builtin: true, unorderedArrays: [], irrelevantFields: [], prosePaths: [] }, request: { model, state: {}, questions: { route: { type: 'choice' as const, instructions: 'x', criteria: { billing: 'b', general: 'g' } } } } }; const candidate = buildCandidate(seed, [{ operator: 'question_id_rename', version: '1', admissibility: 'structural', renames: { route: 'r' }, reads: [], writes: [], requires: [], invalidates: [] }], [contract],undefined,sourceProvider); let n=0; const execute={modelChanged:false,async evaluate(payload:string,phase:Phase):Promise<Observation>{const request=JSON.parse(payload), id=Object.keys(request.questions)[0]!, choice=id==='route'?'billing':'general', response:JevResponse={model:'sim',answers:{[id]:{type:'choice',choice,probabilities:{billing:choice==='billing'?1:0,general:choice==='general'?1:0},confidence:1}},usage:{input_tokens:0,output_tokens:0}};n++;return{id:`o${n}`,operationId:`p${n}`,phase,wireHash:createHash('sha256').update(payload).digest('hex'),response,provider:'fake',observedModel:'sim',cache:'fresh'};}}; const signature='["relation-v1","route","route","invariant","choice","label","billing","general"]'; const confirmation=await confirmCandidate(candidate,contract,execute,oracle,{signature,seed:1}); return createFinding(candidate,contract,oracle,confirmation,{provider:sourceProvider,reducers:{independentQuestions:false,optionalStatePaths:[],unorderedArrayPaths:[],prosePaths:[]}}); }
 
 test('immutable add dedupes exact evidence before journaling and rejects quota changes', async () => { await mkdir(root,{recursive:true,mode:0o700}); const value=await finding(), id=await addToCorpus(value,root,{maxBytes:1_000_000}); assert.equal(await addToCorpus(value,root),id); await assert.rejects(addToCorpus(value,root,{maxBytes:1}),/limit mismatch/); const index=await inspectCorpus(root); assert.equal(index.entries.length,1); assert.equal(index.entries[0]!.evidence.length,1); });
 test('initialization persists a versioned quota manifest and cannot silently change it', async () => { const directory=join(root,'manifest'); await initializeCorpus(directory,100_000); assert.deepEqual(await readJson(join(directory,'corpus.json')),{version:2,kind:'corpus-storage',maxBytes:100_000}); await assert.rejects(initializeCorpus(directory,100_001),/limit mismatch/); });
 test('inspection rejects malformed durable triage fields', async () => { const directory=join(root,'malformed-triage'), id=await addToCorpus(await finding(),directory); const journal=await ExecutionJournal.resume(join(directory,'triage.jsonl')); try { await journal.append('triaged',{id,triage:{status:'quarantined',actor:'a',reason:'r',timestamp:'not-a-date'}}); } finally { await journal.close(); } await assert.rejects(inspectCorpus(directory),/triage|quarantine/i); });
 test('quarantine excludes before expiry and expired quarantine is required again', async () => { const value=await finding(), id=await addToCorpus(value,root); await triageCorpus(root,id,'quarantined',{actor:'a',reason:'r',expiresAt:'2000-01-01T00:00:00.000Z',reevaluate:'fresh'}); const index=await inspectCorpus(root); assert.equal(index.entries[0]!.triage.status,'quarantined'); const report=await checkCorpus(root,provider(),{oracle,now:'2001-01-01T00:00:00.000Z'}); assert.equal(report.expired,1); assert.ok(report.results.length===1); });
 test('fixed-stat slot preflight makes no provider calls', async () => { const directory=join(root,'fixed-slots'), id=await addToCorpus(await finding(),directory); await triageCorpus(directory,id,'accepted_regression',{actor:'a',reason:'accepted'}); let calls=0; const source=new FakeProvider(request => { calls++; const id=Object.keys(request.questions)[0]!, choice=id==='route'?'billing':'general'; return {model:'sim',answers:{[id]:{type:'choice',choice,probabilities:{billing:choice==='billing'?1:0,general:choice==='general'?1:0},confidence:1}},usage:{input_tokens:0,output_tokens:0}}; }); await assert.rejects(checkCorpus(directory,source,{oracle:{...oracle,profile:'fixed-stat-v1',originalSlots:0,shrinkSlots:0}}),/reserved slot/); assert.equal(calls,0); });
+test('fixed-stat cache metadata preflight makes no provider calls', async () => { const directory=join(root,'fixed-cache'), id=await addToCorpus(await finding(),directory); await triageCorpus(directory,id,'accepted_regression',{actor:'a',reason:'accepted'}); let calls=0; const source={async evaluate(){calls++;throw new Error('must not dispatch');}}; await assert.rejects(checkCorpus(directory,source,{providerName:'custom',oracle:{...oracle,profile:'fixed-stat-v1',originalSlots:1}}),/cache metadata/); assert.equal(calls,0); });
 test('empty corpus is incomplete exit three', async () => { const empty=join(root,'empty'); await mkdir(empty,{recursive:true,mode:0o700}); const report=await checkCorpus(empty,provider()); assert.equal(report.exitCode,3); assert.equal(report.total,0); });
 test('foreign provider corpus check rejects before calls or journal creation', async () => {
   const directory=join(root,'foreign-provider'), id=await addToCorpus(await finding(),directory);
@@ -32,6 +33,41 @@ test('foreign provider corpus check rejects before calls or journal creation', a
   const before=await readdir(directory); let calls=0;
   await assert.rejects(checkCorpus(directory,new FakeProvider(()=>{calls++;throw new Error('must not dispatch');}),{providerName:'cloudflare',oracle}),/provider identity/);
   assert.equal(calls,0); assert.deepEqual(await readdir(directory),before);
+});
+test('selected evidence alone chooses the provider and exact default oracle', async () => {
+  const directory=join(root,'selected-oracle'), accepted=await finding(), excluded=await finding('excluded','cloudflare');
+  excluded.oracle={...excluded.oracle, minimumSupport:.5};
+  const excludedId=await addToCorpus(excluded,directory), acceptedId=await addToCorpus(accepted,directory);
+  await triageCorpus(directory,acceptedId,'accepted_regression',{actor:'a',reason:'reviewed'});
+  const prepared=prepareCorpusCheck(await corpusFindings(directory),{providerName:'custom'});
+  assert.equal(prepared.selected.length,1); assert.equal(prepared.provider,'custom'); assert.deepEqual(prepared.oracle,accepted.oracle);
+  let calls=0; const report=await checkCorpus(directory,provider('sim',()=>{calls++;}),{providerName:'custom'});
+  assert.ok(calls > 0); assert.deepEqual(report.oracle,accepted.oracle); assert.deepEqual(accepted.oracle,oracle);
+  assert.equal((await inspectCorpus(directory)).entries.find(entry=>entry.id===excludedId)!.triage.status,'confirmed');
+});
+test('changed authoritative preparation rejects before calls or a check journal', async () => {
+  const directory=join(root,'preparation-changed'), id=await addToCorpus(await finding(),directory); await triageCorpus(directory,id,'accepted_regression',{actor:'a',reason:'reviewed'});
+  const prepared=prepareCorpusCheck(await corpusFindings(directory),{providerName:'custom'}); let calls=0;
+  await triageCorpus(directory,id,'confirmed',{actor:'a',reason:'changed'});
+  const before=await readdir(directory);
+  await assert.rejects(checkCorpus(directory,new FakeProvider(()=>{calls++;throw new Error('must not dispatch');}),{providerName:'custom',expectedPreparationHash:prepared.preparationHash}),/changed after check preflight/);
+  assert.equal(calls,0); assert.deepEqual(await readdir(directory),before);
+});
+test('mixed selected oracle defaults reject before calls or check journal creation', async () => {
+  const directory=join(root,'mixed-selected-oracle'), first=await finding(), second=await finding('second');
+  second.oracle={...second.oracle, minimumSupport:.5};
+  const firstId=await addToCorpus(first,directory), secondId=await addToCorpus(second,directory);
+  await triageCorpus(directory,firstId,'accepted_regression',{actor:'a',reason:'reviewed'}); await triageCorpus(directory,secondId,'accepted_regression',{actor:'a',reason:'reviewed'});
+  const before=await readdir(directory); let calls=0;
+  await assert.rejects(checkCorpus(directory,new FakeProvider(()=>{calls++;throw new Error('must not dispatch');}),{providerName:'custom'}),/oracle configurations differ/);
+  assert.equal(calls,0); assert.deepEqual(await readdir(directory),before);
+});
+test('explicit complete oracle overrides mixed selected defaults', async () => {
+  const directory=join(root,'explicit-oracle'), first=await finding(), second=await finding('third'), override={...oracle,pairs:1};
+  second.oracle={...second.oracle, minimumSupport:.5};
+  const firstId=await addToCorpus(first,directory), secondId=await addToCorpus(second,directory);
+  await triageCorpus(directory,firstId,'accepted_regression',{actor:'a',reason:'reviewed'}); await triageCorpus(directory,secondId,'accepted_regression',{actor:'a',reason:'reviewed'});
+  const report=await checkCorpus(directory,provider(),{providerName:'custom',oracle:override}); assert.deepEqual(report.oracle,override); assert.equal(report.required,2);
 });
 test('orphaned immutable evidence is reused without a second quota charge', async () => {
   const directory=join(root,'orphan-recovery'), value=await finding(), text=JSON.stringify(value), bytes=Buffer.byteLength(text);

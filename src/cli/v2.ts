@@ -11,7 +11,7 @@ import { BudgetLedger } from '../engine/budget.ts';
 import { confirmCandidate, HypothesisSlots } from '../oracles/index.ts';
 import { loadFinding, validateFinding } from '../artifacts-v2.ts';
 import { shrinkFinding } from '../shrink/index.ts';
-import { addToCorpus, checkCorpus, corpusFindings, inspectCorpus, pruneCorpus, triageCorpus, type TriageStatus } from '../corpus/index.ts';
+import { addToCorpus, checkCorpus, corpusFindings, inspectCorpus, prepareCorpusCheck, pruneCorpus, triageCorpus, type TriageStatus } from '../corpus/index.ts';
 import { compareExperiment, loadExperiment } from '../experiments.ts';
 import { renderReportHtml, renderReportText } from '../reports-v2.ts';
 import { ExecutionJournal } from '../engine/journal.ts';
@@ -182,14 +182,11 @@ export async function mainV2(argv: string[], io: V2CliIO): Promise<number> {
     if (command === 'check') {
       assert(args.length === 1, 'check requires one corpus directory');
       const entries = await corpusFindings(args[0]!);
-      const names = [...new Set(entries.map(item => item.finding.provider))];
-      assert(names.length <= 1, 'mixed-provider corpus requires separate corpora or a comparison experiment');
-      const selected = (requestedProvider ?? names[0] ?? 'typesafe') as 'typesafe' | 'cloudflare' | 'custom';
-      assert(entries.every(item => item.finding.provider === selected), 'corpus provider identity mismatch');
       const profile = value(flags, 'profile');
       assert(profile === undefined || profile === 'paired-v1' || profile === 'fixed-stat-v1', 'unsupported oracle profile');
-      const oracle = profile && entries[0] ? { ...entries[0].finding.oracle, profile: profile as OracleConfig['profile'] } : undefined;
-      const result = await checkCorpus(args[0]!, provider(io, selected), { signal: io.signal, secrets, providerName: selected, oracle }); out(result, flags); return result.exitCode;
+      const prepared = prepareCorpusCheck(entries, { profile: profile as OracleConfig['profile'] | undefined, providerName: requestedProvider });
+      const selected = prepared.provider as 'typesafe' | 'cloudflare' | 'custom';
+      const result = await checkCorpus(args[0]!, provider(io, selected), { signal: io.signal, secrets, providerName: selected, profile: profile as OracleConfig['profile'] | undefined, expectedPreparationHash: prepared.preparationHash }); out(result, flags); return result.exitCode;
     }
     if (command === 'corpus') {
       const [operation, directory, ...rest] = args;

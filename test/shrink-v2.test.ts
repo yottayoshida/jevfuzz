@@ -51,6 +51,39 @@ test('prose declarations cannot alter requested model or other routing metadata'
   const e=executor();await assert.rejects(shrinkFinding(original,e,ledger()),/decision content/);assert.equal(e.calls(),0);
 });
 test('does not remove contract or policy-referenced questions', async () => { const policyFinding = finding([rename], { independentQuestions: true, optionalStatePaths: [], unorderedArrayPaths: [], prosePaths: [] }); policyFinding.policy = { version: 1, fallback: 'hold', rules: [{ when: { question: 'noise', field: 'noul', op: 'gt', value: 0 }, action: 'go' }] }; policyFinding.candidate = buildCandidate({ id: 'seed', mutations: { builtin: true, unorderedArrays: [], irrelevantFields: [], prosePaths: [] }, request: JSON.parse(policyFinding.candidate.basePayload) }, policyFinding.candidate.recipe, [contract], policyFinding.policy, policyFinding.provider); const result = await shrinkFinding(policyFinding, executor(), ledger()); assert.equal(result.status, 'locally_minimal'); });
+test('keeps nested policy, action-template, and fallback dependencies while removing an unrelated question', async () => {
+  const policyContract: Finding['contract'] = { ...contract, projection: 'policy' };
+  const request = { model: 'jev-latest', state: {}, questions: {
+    route: { type: 'choice' as const, instructions: 'route', criteria: { billing: 'bill', general: 'general' } },
+    whenOnly: { type: 'noul' as const, instructions: 'when' },
+    actionOnly: { type: 'choice' as const, instructions: 'action', criteria: { keep: 'keep', other: 'other' } },
+    fallbackOnly: { type: 'choice' as const, instructions: 'fallback', criteria: { keep: 'keep', other: 'other' } },
+    unrelated: { type: 'noul' as const, instructions: 'unrelated' },
+  } };
+  const policy = { version: 1 as const, fallback: 'fallback-${fallbackOnly}', rules: [{ when: { all: [{ question: 'whenOnly', field: 'noul' as const, op: 'gt' as const, value: 0 }] }, action: 'route-${route}-${actionOnly}' }] };
+  const original = finding([rename], { independentQuestions: true, optionalStatePaths: [], unorderedArrayPaths: [], prosePaths: [] });
+  original.contract = policyContract;
+  original.policy = policy;
+  original.confirmation = { ...original.confirmation, signature: '["relation-v1","route","route","invariant","policy","action","route-billing-keep","route-general-keep"]' };
+  original.candidate = buildCandidate({ id: 'seed', mutations: { builtin: true, unorderedArrays: [], irrelevantFields: [], prosePaths: [] }, request }, [rename], [policyContract], policy);
+  let calls = 0;
+  const e = { modelChanged: false, async evaluate(payload: string, phase: Phase): Promise<Observation> {
+    const input = JSON.parse(payload);
+    const answers = Object.fromEntries(Object.entries(input.questions).map(([id, question]) => {
+      if ((question as { type: string }).type === 'noul') return [id, { type: 'noul' as const, noul: 1 }];
+      const choice = id === 'route' ? 'billing' : id === 'r' ? 'general' : 'keep';
+      return [id, { type: 'choice' as const, choice, probabilities: { billing: choice === 'billing' ? 1 : 0, general: choice === 'general' ? 1 : 0, keep: choice === 'keep' ? 1 : 0, other: 0 }, confidence: 1 }];
+    }));
+    calls++;
+    return { id: `policy-o${calls}`, operationId: `policy-p${calls}`, phase, wireHash: createHash('sha256').update(payload).digest('hex'), response: { model: 'sim', answers, usage: { input_tokens: 0, output_tokens: 0 } }, provider: 'sim', observedModel: 'sim', cache: 'fresh' };
+  } };
+  const result = await shrinkFinding(original, e, ledger());
+  assert.equal(result.status, 'reduced', JSON.stringify(result));
+  assert.deepEqual(Object.keys(JSON.parse(result.finding.candidate.basePayload).questions), ['route', 'whenOnly', 'actionOnly', 'fallbackOnly']);
+  assert.ok(result.history.some(step => step.accepted && step.reason === 'remove-question:unrelated'));
+  assert.ok(result.history.every(step => !['remove-question:route', 'remove-question:whenOnly', 'remove-question:actionOnly', 'remove-question:fallbackOnly'].includes(step.reason)));
+  assert.ok(result.finding.confirmation.blocks.every(block => block.a.phase === 'final-confirmation' && block.b.phase === 'final-confirmation'));
+});
 test('invalid mappings are rejected before any network screen', async () => { const bad = finding(); bad.candidate.recipe[0] = { ...bad.candidate.recipe[0]!, renames: { missing: 'r' } }; const e = executor(); const result = await shrinkFinding(bad, e, ledger()); assert.equal(result.status, 'unconfirmed'); assert.equal(result.attempted, 0); assert.equal(e.calls(), 0); });
 test('reports budget_limited when enabled reductions remain but shrink capacity is absent', async () => { const result = await shrinkFinding(finding(), executor(), ledger(0)); assert.equal(result.status, 'budget_limited'); });
 test('strict complexity rejects a same-size order-only candidate', async () => { const order: MutationStep = { operator: 'question_order', version: '1', admissibility: 'structural', order: ['noise', 'route'], reads: [], writes: [], requires: [], invalidates: [] }; const f = finding([rename, order], { independentQuestions: false, optionalStatePaths: [], unorderedArrayPaths: [], prosePaths: [] }); const result = await shrinkFinding(f, executor(), ledger()); assert.ok(result.history.every(h => h.accepted === false || h.complexity[0]! < result.originalComplexity[0]!)); });

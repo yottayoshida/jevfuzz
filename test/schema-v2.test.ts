@@ -8,6 +8,9 @@ import { loadCampaign } from '../src/campaign-config.ts';
 import { campaign } from '../src/engine/campaign.ts';
 import { FakeProvider } from '../src/provider.ts';
 import { validateFindingShape, validateReportArtifact } from '../src/report-validator.ts';
+import { parseExperiment } from '../src/experiments.ts';
+import { buildCandidate } from '../src/mutators/index.ts';
+import type { Contract } from '../src/campaign-types.ts';
 
 async function schemas() {
   const ajv = new Ajv2020({ strict: true, allowUnionTypes: true, allErrors: true });
@@ -47,10 +50,15 @@ test('generated report reader accepts every writer artifact and rejects unknown 
       { version: 2, kind: 'experiment-report', name: 'schema', cases: [{ id: 'case', status: 'no_detected_regression', old: { target: 'old', provider: 'custom', targetHash: hash, status: 'holds', observations: 0, observedModels: [] }, new: { target: 'new', provider: 'custom', targetHash: hash, status: 'holds', observations: 0, observedModels: [] } }], counts: { introduced: 0, resolved: 0, persists: 0, no_detected_regression: 1, inconclusive: 0 }, status: 'complete', exitCode: 0, budget: report.budget },
       finding,
     ];
+    const currentCheck = { ...(artifacts[2] as Record<string, unknown>), oracle: finding.oracle };
+    artifacts.push(currentCheck);
     for (const [index, artifact] of artifacts.entries()) {
       assert.equal(rootSchema(artifact), true, `Ajv artifact ${index}: ${JSON.stringify(rootSchema.errors)}`);
       assert.doesNotThrow(() => validateReportArtifact(artifact), `standalone artifact ${index}`);
     }
+    const v01Report = structuredClone(report) as any; v01Report.componentVersions.scheduler = 'batch-v1';
+    assert.equal(rootSchema(v01Report), true, JSON.stringify(rootSchema.errors));
+    assert.doesNotThrow(() => validateReportArtifact(v01Report));
     assert.doesNotThrow(() => validateFindingShape(finding));
     assert.throws(() => validateReportArtifact({ version: 2, kind: 'unknown' }));
     const corrupted = structuredClone(report); (corrupted.results[0]!.relations[0]!.discovery as any).surprise = true;
@@ -61,6 +69,9 @@ test('generated report reader accepts every writer artifact and rejects unknown 
     const unicode = structuredClone(artifacts[1] as any); unicode.entries[0].sourceFindingIds = ['😀'.repeat(4097)];
     assert.equal(rootSchema(unicode), false, 'Ajv counts Unicode code points for maxLength');
     assert.throws(() => validateReportArtifact(unicode), 'standalone validator preserves Ajv Unicode length semantics');
+    const invalidCheckOracle = { ...currentCheck, oracle: { ...finding.oracle, pairs: 0 } };
+    assert.equal(rootSchema(invalidCheckOracle), false);
+    assert.throws(() => validateReportArtifact(invalidCheckOracle));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -72,8 +83,48 @@ test('real campaign checkpoint and confirmed finding satisfy exported schemas', 
     assert.ok(report.findings.length > 0);
     const finding = ajv.getSchema('https://jevfuzz.dev/schema/finding-v2.schema.json')!, checkpoint = ajv.getSchema('https://jevfuzz.dev/schema/checkpoint-v2.schema.json')!;
     assert.equal(finding(report.findings[0]), true, JSON.stringify(finding.errors));
-    assert.equal(checkpoint(JSON.parse(await readFile(join(report.directory!, 'checkpoint.json'), 'utf8'))), true, JSON.stringify(checkpoint.errors));
+    const saved = JSON.parse(await readFile(join(report.directory!, 'checkpoint.json'), 'utf8'));
+    assert.equal(checkpoint(saved), true, JSON.stringify(checkpoint.errors));
+    const legacyCheckpoint = structuredClone(saved); legacyCheckpoint.componentVersions.scheduler = 'batch-v1'; legacyCheckpoint.scheduler.version = 'batch-v1';
+    assert.equal(checkpoint(legacyCheckpoint), false, 'checkpoint schema rejects batch-v1 resumes');
     const tampered = structuredClone(report.findings[0]!); (tampered.confirmation.blocks[0]!.a as any).hidden = true;
     assert.equal(finding(tampered), false);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('experiment input schemas preserve explicit source and target mapping fields', async () => {
+  const contract: Contract = { id: 'decision', question: 'decision', relation: 'invariant', projection: 'choice', mutations: ['question_id_rename'], admissibility: 'structural', assumptions: [], required: true };
+  const candidate = buildCandidate({ id: 'seed', request: { state: {}, model: 'model', questions: { decision: { type: 'choice', instructions: 'Choose.', criteria: { yes: 'yes', no: 'no' } } } }, mutations: { builtin: true, unorderedArrays: [], irrelevantFields: [], prosePaths: [] } }, [{ operator: 'question_id_rename', version: '1', admissibility: 'structural', renames: { decision: 'mutant' }, reads: [], writes: [], requires: [], invalidates: [] }], [contract], undefined, 'cloudflare');
+  const input = {
+    version: 2, kind: 'experiment', name: 'mapped-target',
+    cases: [{ id: 'case', candidate, contract, source: { provider: 'cloudflare' } }],
+    old: { id: 'old', provider: 'custom' },
+    new: {
+      id: 'new', provider: 'custom',
+      questions: { decisionV2: { type: 'choice', instructions: 'Choose.', criteria: { allow: 'yes', deny: 'no' } } },
+      sourceQuestionMapping: { decision: 'decisionV2' },
+      sourceLabelMappings: { decision: { yes: 'allow', no: 'deny' } },
+      policy: { version: 1, rules: [{ when: { question: 'decisionV2', field: 'choice', op: 'eq', value: 'allow' }, action: 'allow' }], fallback: 'hold' },
+    },
+    oracle: { profile: 'paired-v1', pairs: 1, minimumSupport: 1, maxControlViolationRate: 0, minimumEffect: 0, alpha: .05, originalSlots: 2, shrinkSlots: 0 },
+    budget: { logicalRequests: 10, httpAttempts: 0, wallTimeSeconds: 30, discoveryRequests: 4, confirmationRequests: 6, shrinkRequests: 0, finalConfirmationRequests: 0 },
+  };
+  const ajv = await schemas();
+  for (const id of ['https://jevfuzz.dev/schema/experiment-v2.schema.json', 'https://jevfuzz.dev/schema/artifacts-v2.schema.json#/$defs/experiment']) {
+    const validate = ajv.getSchema(id)!;
+    assert.equal(validate(input), true, JSON.stringify(validate.errors));
+    const missingMappingShape = structuredClone(input) as any;
+    missingMappingShape.new.sourceQuestionMapping.decision = 7;
+    assert.equal(validate(missingMappingShape), false);
+    const badLabels = structuredClone(input) as any;
+    badLabels.new.sourceLabelMappings.decision = ['allow', 'deny'];
+    assert.equal(validate(badLabels), false);
+    const badSource = structuredClone(input) as any;
+    badSource.cases[0].source.unexpected = true;
+    assert.equal(validate(badSource), false);
+  }
+  assert.doesNotThrow(() => parseExperiment(input));
+  const legacy = structuredClone(input) as any;
+  legacy.new = { id: 'new', provider: 'custom' };
+  assert.doesNotThrow(() => parseExperiment(legacy));
 });

@@ -64,6 +64,19 @@ test('checkpoint config/component tampering is rejected before provider calls', 
     assert.equal(calls, 0);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+test('batch-v1 checkpoints reject before creating a child or dispatching a provider call', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'jevfuzz-recovery-scheduler-v1-'));
+  try {
+    const config = await loadCampaign(fixture); config.storage.directory = root; config.search.maxCandidates = 3;
+    const run = await campaign(config, new FakeProvider());
+    const path = join(run.directory!, 'checkpoint.json'), saved = JSON.parse(await readFile(path, 'utf8'));
+    saved.componentVersions.scheduler = 'batch-v1'; saved.scheduler.version = 'batch-v1';
+    await writeFile(path, JSON.stringify(saved));
+    const before = await readdir(join(root, 'runs')); let calls = 0;
+    await assert.rejects(resumeCampaign(path, new FakeProvider(() => { calls++; throw new Error('must not dispatch'); })), /component versions changed/);
+    assert.equal(calls, 0); assert.deepEqual(await readdir(join(root, 'runs')), before);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
 test('completed campaigns reject resume without creating a child or spending requests', async () => {
   const root = await mkdtemp(join(tmpdir(), 'jevfuzz-complete-resume-'));
   try {

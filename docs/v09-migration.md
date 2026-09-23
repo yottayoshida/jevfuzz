@@ -33,6 +33,16 @@ policy, copy it to `source.policy`. This binds the imported witness to its
 original target hash before either experiment target constructs a provider;
 target overrides describe only the old/new definitions.
 
+When identifiers change between the saved source and a target, supply
+`sourceQuestionMapping` as source question ID → target question ID, and
+`sourceLabelMappings` as source question ID → source Choice label → target
+Choice label. Each supplied mapping must be a complete bijection; omitted
+mappings mean unchanged identifiers. Target `questions` and `policy` use the
+target identifiers. Existing `questionMapping` and `labelMappings` retain their
+mutant → base meanings within a target, and can assert the replayed witness.
+Both targets must validate before either makes a provider call. A structural
+mapping does not establish that rewritten instructions have equivalent meaning.
+
 `corpus add` stores confirmed evidence. Review it, then use `corpus triage
 <directory> <id> --status accepted_regression --actor <name> --reason <reason>`
 to make it a required regression. Quarantine requires an expiry and a concrete
@@ -41,7 +51,16 @@ reevaluation condition. Expired quarantines become required again.
 `fuzz --require-confirmation-complete` returns exit 3 if required confirmation
 is still pending. `check --profile paired-v1` explicitly selects the empirical
 profile; selecting `fixed-stat-v1` requires an adapter with observable cache
-freshness and enough reserved hypothesis slots. A provider override on a new
+freshness and enough reserved hypothesis slots. With no override, `check`
+preserves the required fixtures' common full oracle configuration; mixed
+configurations require an explicit selection. Excluded fixtures do not select
+the provider or oracle. `--profile` selects a complete preset: 8 paired blocks
+or 64 fixed-stat blocks, support `.75`, control ceiling `.125`, minimum effect
+`0`, and alpha `.05`. It reserves one original slot per required fixture and
+no shrink slots. The new check report records the effective `oracle`; historical
+reports without this field remain readable. Library callers can explicitly
+supply a complete `options.oracle` instead of a named preset.
+A provider override on a new
 campaign changes its target fingerprint. Replay, resume, and compare reject
 identity-changing provider overrides. `check` infers a homogeneous corpus's
 provider; mixed-provider corpora and identity-changing overrides are rejected.
@@ -81,3 +100,5 @@ Declared independent-question removal or question-text whitespace normalization
 creates a child with a newly computed target hash and the original parent finding
 ID. Provider, requested model, policy, protected questions, and the violation
 signature are preserved; new final observations establish the child evidence.
+Questions referenced by policy predicates, rule-action templates, or fallback
+templates are protected from independent-question removal.

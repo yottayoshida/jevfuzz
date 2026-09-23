@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "kind": "readme-demo-evidence",
+  "sourceDate": "2026-09-23",
+  "provider": "cloudflare",
+  "observedModel": "jev-1.13.0",
+  "releasedCommit": "6195a638b2ed2c0a7b4d72a6554899f338599b66",
+  "inputProvenance": "Public synthetic example, as recorded in docs/provider-conformance.md. These are actual API observations; not an external-user workload or statistical independence guarantee.",
+  "source": {
+    "path": "readme-finding.json",
+    "sha256": "08949a719896d3aacc9f397158788166d33037f4ca3f16c424b3c0f2962e14c7",
+    "originalFindingId": "316b5d0caa25969ee27c72ec",
+    "reducedFindingId": "9369a216c7da4088f66115a4"
+  },
+  "corpus": {
+    "path": "readme-corpus.json",
+    "sha256": "21ff683fbe6b68147ad7118dc70b6c7af242f9203ab571e67f5265a44f2278a2",
+    "id": "943527cc45b2f3102ad809ba38e97bf07b5fcbf5f2fe184949b11562e5a4ee90"
+  },
+  "display": {
+    "objectPath": "$.state",
+    "question": "relevance"
+  },
+  "limits": [
+    "Display elides field values; full payloads are in readme-finding.json.",
+    "3 to 2 counts moved key positions, not removed fields or fewer bytes.",
+    "Confirmation uses new calls; origin cache freshness and independence are unknown.",
+    "Animation replays recorded results and does not call an API."
+  ]
+}

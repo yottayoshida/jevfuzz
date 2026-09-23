@@ -6,14 +6,30 @@ import { tmpdir } from 'node:os';
 import { loadCampaign } from '../src/campaign-config.ts';
 import { campaign, planCampaign } from '../src/engine/campaign.ts';
 import { FakeProvider } from '../src/provider.ts';
+import { generateCandidateSet } from '../src/mutators/index.ts';
 import { renderReportText } from '../src/reports-v2.ts';
-import type { JevRequest, JevResponse } from '../src/types.ts';
+import type { DecisionProvider, EvaluateOptions, JevRequest, JevResponse } from '../src/types.ts';
 
 const fixture = new URL('../fixtures/v2/routing.campaign.json', import.meta.url).pathname;
 function simulator(request: JevRequest, bug = true): JevResponse {
   const order = Object.keys(request.questions);
   const changed = bug && typeof request.state === 'object' && request.state !== null && Object.hasOwn(request.state, 'trace_id') && request.questions[order[0]!]!.type === 'noul';
   return { model: 'simulator-routing-v1', usage: { input_tokens: 0, output_tokens: 0 }, answers: Object.fromEntries(Object.entries(request.questions).map(([id, q]) => [id, q.type === 'choice' ? { type: 'choice', choice: changed ? 'general' : 'billing', confidence: .9, probabilities: { general: changed ? .9 : .1, billing: changed ? .1 : .9 } } : { type: 'noul', noul: .2 }])) };
+}
+class DelayedProvider implements DecisionProvider {
+  readonly mode = 'fake' as const;
+  readonly capabilities = { adapterId: 'test-delayed', adapterVersion: '1', observedModel: true, probabilities: true, confidence: true, usage: true, httpAccounting: true, byteReplay: true, cancellation: true, cacheMetadata: true, attemptHooks: true };
+  #attempt = 0;
+  readonly handler: (request: JevRequest) => JevResponse;
+  constructor(handler: (request: JevRequest) => JevResponse) { this.handler = handler; }
+  async evaluate(request: JevRequest, options: EvaluateOptions = {}): Promise<JevResponse> {
+    await new Promise(resolve => setTimeout(resolve, Object.keys(request.questions)[0] === 'department' ? 4 : 0));
+    const attempt = { attemptId: `delayed-${this.#attempt++}`, transportPayload: JSON.stringify(request), attempt: 1 };
+    await options.beforeAttempt?.(attempt); await options.observedMetadata?.({ cache: 'fresh' });
+    const response = this.handler(request);
+    await options.settledAttempt?.({ ...attempt, outcome: 'known' });
+    return response;
+  }
 }
 test('campaign detects a noncontiguous order-plus-metadata interaction using only fresh confirmations', async () => {
   const config = await loadCampaign(fixture); config.search.strategy = 'enumerator'; config.search.maxCandidates = 200;
@@ -39,6 +55,28 @@ test('batch selection and stable corpus do not depend on configured concurrency'
     assert.deepEqual(run.results.map(r => r.candidateId), runs[0]!.results.map(r => r.candidateId));
     assert.deepEqual(run.coverageProxy, runs[0]!.coverageProxy); assert.equal(run.findings.length, 0);
   }
+});
+test('confirmation uses selected batch order when its budget funds one violating candidate', async () => {
+  const config = await loadCampaign(fixture);
+  config.search = { ...config.search, strategy: 'enumerator', batchSize: 2, concurrency: 4, maxCandidates: 2 };
+  config.oracle = { ...config.oracle, pairs: 1 };
+  config.budget = { ...config.budget, logicalRequests: 7, httpAttempts: 7, discoveryRequests: 4, confirmationRequests: 3, shrinkRequests: 0, finalConfirmationRequests: 0 };
+  const selected = generateCandidateSet(config).candidates;
+  const mutantPayloads = new Set(selected.map(candidate => candidate.mutantPayload));
+  const provider = new DelayedProvider(request => {
+    const mutant = mutantPayloads.has(JSON.stringify(request));
+    return {
+      model: 'selected-order', usage: { input_tokens: 0, output_tokens: 0 },
+      answers: Object.fromEntries(Object.entries(request.questions).map(([id, question]) => [id, question.type === 'noul'
+        ? { type: 'noul', noul: .2 }
+        : { type: 'choice', choice: mutant ? 'general' : 'billing', confidence: .9, probabilities: mutant ? { general: .9, billing: .1 } : { general: .1, billing: .9 } },
+      ])),
+    };
+  });
+  const result = await campaign(config, provider, { persist: false });
+  const confirmed = result.results.filter(result => result.relations.some(relation => relation.confirmation && relation.confirmation.reason !== 'CONFIRMATION_BUDGET_UNAVAILABLE'));
+  assert.deepEqual(confirmed.map(result => result.candidateId), [selected[0]!.id]);
+  assert.equal(result.results.find(result => result.candidateId === selected[1]!.id)!.relations[0]!.pending, true);
 });
 test('campaign persists a private complete checkpoint and withholds replay evidence in hash-only mode', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'jevfuzz-campaign-'));

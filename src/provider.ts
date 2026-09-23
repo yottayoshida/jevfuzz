@@ -244,6 +244,10 @@ abstract class HttpProvider implements DecisionProvider {
   protected abstract unpack(raw: unknown): unknown;
 
   protected serialize(request: JevRequest, supplied?: string): string { return JSON.stringify(this.body(request)); }
+  protected requestHeaders(): Record<string, string> {
+    return { Authorization: `Bearer ${this.#token}`, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store' };
+  }
+  protected observedCache(_response: Response): 'unknown' | 'cached' { return 'unknown'; }
 
   async evaluate(request: JevRequest, options: EvaluateOptions = {}): Promise<JevResponse> {
     const payload = this.serialize(request, options.payload);
@@ -260,7 +264,7 @@ abstract class HttpProvider implements DecisionProvider {
         dispatched = true;
         this.#httpAttempts++;
         const init: RequestInit & { cache: 'no-store' } = {
-          method: 'POST', headers: { Authorization: `Bearer ${this.#token}`, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store' },
+          method: 'POST', headers: this.requestHeaders(),
           body: payload, redirect: 'manual', cache: 'no-store', signal,
         };
         const response = await this.#fetch(this.#url, init);
@@ -281,7 +285,7 @@ abstract class HttpProvider implements DecisionProvider {
         }
         const normalized = validateResponse(this.unpack(raw), request);
         if (JSON.stringify(normalized).includes(this.#token)) throw providerError('PROVIDER_RESPONSE', 'provider response contains a credential');
-        await settle('known'); try { await options.observedMetadata?.({ cache: 'unknown' }); } catch (error) { throw hookError(error, 'PERSISTENCE_ERROR'); }
+        await settle('known'); try { await options.observedMetadata?.({ cache: this.observedCache(response) }); } catch (error) { throw hookError(error, 'PERSISTENCE_ERROR'); }
         return normalized;
       } catch (error) {
         if (dispatched) await settle('unknown');
@@ -332,6 +336,10 @@ function cloudflareResult(raw: unknown): unknown {
 /** Minimal Workers AI adapter, kept separate because its wire format is not TypeSafe System One's. */
 export class CloudflareProvider extends HttpProvider {
   constructor(env: Environment = process.env, options: ProviderOptions = {}) { super(cloudflareUrl(env), tokenValue(env, 'CLOUDFLARE_API_TOKEN'), options); }
+  protected requestHeaders(): Record<string, string> { return { ...super.requestHeaders(), 'cf-aig-skip-cache': 'true' }; }
+  protected observedCache(response: Response): 'unknown' | 'cached' {
+    return response.headers.get('cf-aig-cache-status')?.trim().toUpperCase() === 'HIT' ? 'cached' : 'unknown';
+  }
   protected body(request: JevRequest): unknown {
     // Workers AI exposes this provider as a fixed model. v0.1 accepts only its
     // canonical name and the TypeSafe latest alias, then maps either to that name.

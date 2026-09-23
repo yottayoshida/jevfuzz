@@ -1,0 +1,23 @@
+{
+  "version": 4,
+  "kind": "jevfuzz-v09-benchmark-manifest-v4-development",
+  "mode": "diagnostic-only",
+  "seedSchedule": "mulberry32-v1",
+  "families": [
+    {"id":"order","expect":"detect"},
+    {"id":"metadata","expect":"detect"},
+    {"id":"interaction2","expect":"detect"},
+    {"id":"interaction3","expect":"detect"},
+    {"id":"rareconfident","expect":"detect"},
+    {"id":"noise","expect":"hold"},
+    {"id":"drift","expect":"inconclusive"},
+    {"id":"choice-invariant","expect":"hold"},
+    {"id":"noul-invariant","expect":"hold"},
+    {"id":"score-invariant","expect":"hold"},
+    {"id":"policy-confidence","expect":"detect"},
+    {"id":"policy-choice","expect":"detect"}
+  ],
+  "strategies": ["enumerator", "uniform", "novelty", "boundary", "feedback"],
+  "full": {"seedStart":0,"seedCount":10,"logicalRequests":1000,"httpAttempts":5000},
+  "fixedStatNull": {"campaigns":1000,"familySlots":10,"pairs":64,"alpha":0.05}
+}
