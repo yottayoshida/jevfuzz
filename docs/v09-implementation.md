@@ -1,12 +1,15 @@
 # v0.9 implementation and evidence ledger
 
-Status: in progress. Implementation is local on `codex/v0.9`; this document is
-not a release announcement or evidence of external adoption.
+Status: local v0.9 development candidate (`0.9.0-dev.0`). Mandatory field
+acceptance and current live conformance remain outstanding. This is not a
+release announcement or evidence of external adoption.
 
 Design authority: the five documents in
 `/Users/i.yoshida/Documents/ChatGPT/jev/docs/jevfuzz-v1/`, dated 2026-09-22.
 Baseline: released v0.1.0, commit `c027851a25f8000a6368e9f11cae5209d3ddd2b9`.
-Fresh baseline: `npm test` exits 0, 61 passed, zero failed/skipped.
+The released compatibility snapshot is retained in `fixtures/compat-v01`.
+Current local tests: 171 passed, zero failed/skipped on Node 22.18.0, 24.0.0,
+and 26.7.0 (2026-09-23). See the verification record below.
 
 ## Slices and acceptance properties
 
@@ -25,15 +28,17 @@ Fresh baseline: `npm test` exits 0, 61 passed, zero failed/skipped.
    uniform quota, bounded queue, statistical slots and append-only recovery.
 6. Production policy (M05): pure declarative projection, explicit compatible
    old/new targets, independent fresh within-target relation evaluation.
-7. Experimental scope (M06): start with proposal import/review, isolated from
-   structural contracts; no optimizer, compiler, or arbitrary code loading.
+7. Experimental scope (M06): optional research was not adopted. No DAG runtime,
+   generated proposal pipeline, predicate pack, optimizer, or compiler is
+   included; ROADMAP §7 does not require these experiments for v0.9.
 8. Stabilization (M09): schemas/migration/provider matrix, packed entrypoint
    verification, adversarial storage tests, fixed simulator benchmark records,
    and an honest field-validation ledger.
 
-Each boundary will have focused tests and fresh independent local review.
-Large cross-boundary changes will be reviewed in these slices rather than
-represented as one unreviewable release diff.
+The implementation is divided into the boundaries above, with focused tests
+and local independent reviews. No GitHub review or current-head CI result is
+claimed. Source schemas and the standalone generated validators are one
+contract-parity unit; broker, journal, and recovery preserve one budget lineage.
 
 ## Boundary contract
 
@@ -76,10 +81,72 @@ publication, deployment and messages to pilot participants are not included in
 this implementation request. Prior Cloudflare live-validation authorization
 is retained, with bounded experiments and no credential persistence.
 
-## Evidence still required
+## Local verification record
 
-- M03 external usability observation, M09-05 three workload families, two
-  external users, two real fix/regression loops. Simulators cannot satisfy it.
-- Fixed complete benchmark trials and promotion decision for feedback.
-- Current packed CLI transcript and provider conformance evidence.
-- Current independent review, verification and residual-risk record.
+All evidence below is local, including the offline HTTP-adapter package test.
+No mandatory test is skipped. The current suite includes actual child-process
+SIGKILL recovery, corpus quota exhaustion with zero further dispatch, strict
+artifact imports, provider identity, fixed-stat integer reference cases, and
+independent fresh final shrink confirmation.
+
+| Command | Observed result |
+| --- | --- |
+| `npm test` | Node 26.7.0: 171/171, exit 0 |
+| `npm exec --offline --package=node@22.18.0 -- node --test test/*.test.ts` | 171/171, exit 0 |
+| `npm exec --offline --package=node@24.0.0 -- node --test test/*.test.ts` | 171/171, exit 0 |
+| `npm run typecheck` | exit 0 |
+| `npm run build` | exit 0 |
+| `git diff --check` | exit 0 |
+| `node scripts/demo-v09.ts` | 27 logical calls, 0 HTTP attempts; buggy check 1, fixed check 0, healthy case preserved |
+
+The exact-binomial test covers 4,728 independently generated Python integer
+reference cases. A disposable mutation returning zero for every tail made
+that assertion fail; restoring the implementation returned it to green.
+The new invalid-triage test also failed before the write-side correction and
+passed afterward, including proof that rejected events do not alter the journal.
+A disposable reversal of report/terminal publication also failed the real child-
+process crash assertion; restoring the production order passed both crash tests.
+
+Package verification runs the installed tarball's executable with no production
+dependencies. Its deterministic HTTP stub exercises doctor, legacy plan/run/
+replay, campaign plan/fuzz, persisted finding replay, iterative shrink, nested
+shrink replay, explicit corpus acceptance, fresh check, and offline HTML. The
+runtime matrix and limitations are in `package-verification.md`.
+
+## Review corrections
+
+Local reviewer route requested/configured: reviewer / gpt-5.6-terra / high.
+Local risk route requested/configured: risk-specialist / gpt-5.6-sol / high.
+The role dispatch selects these models; independently queryable per-agent
+runtime routing and sandbox attestation are unavailable and are not invented.
+
+Corrected findings include deep JSON inside payload strings, cross-provider
+corpus replay, double-charged orphaned corpus evidence, report identity fields,
+false completion after quota failure, retry budget errors mislabeled as storage
+errors, and omitted declared prose whitespace reductions. The independent
+reviews are local evidence, not GitHub reviews.
+
+## Outstanding acceptance
+
+- M03 usability observation and M09-05: three real workload families, two
+  external users, two real counterexample → fix → regression loops. Bundled
+  synthetic routing/filter/risk examples and the demo do not satisfy this.
+- M09-02 live conformance: no v0.9 live provider result is claimed. The current
+  environment has no supplied credential configuration. TypeSafe and Cloudflare
+  adapter tests are deterministic offline tests; live cache freshness remains
+  unknown and fixed-stat is refused for those adapters.
+- M04-07/M09-06: benchmark acceptance is determined by the complete corrected
+  frozen protocol and its raw results, not by test-suite success. See
+  `benchmark-v09.md`; superseded measurements cannot support promotion.
+- No v0.9 push, merge, release, npm publication, deployment, or contact with
+  external users has been performed. These external operations need explicit
+  operation-and-target authorization.
+
+## Verification tooling limitation
+
+The local risk classifier returned high-risk for sensitive data, recovery, and
+change size. The optional diff-receipt helper
+`python3 ~/.codex/hooks/quality_guard.py receipt --repo . ...` returned
+`QUALITY_INTERNAL_ERROR` (exit 2). No successful receipt or unobservable
+per-agent sandbox attestation is claimed; the executed commands above and their
+local test output remain the verification evidence.
