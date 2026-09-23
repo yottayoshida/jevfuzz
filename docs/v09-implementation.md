@@ -1,6 +1,6 @@
 # v0.9 implementation and evidence ledger
 
-Status: local v0.9 development candidate (`0.9.0-dev.0`). Mandatory field
+Status: local implementation of the v0.9 design scope; package version `0.2.0`. Mandatory field
 acceptance and current live conformance remain outstanding. This is not a
 release announcement or evidence of external adoption.
 

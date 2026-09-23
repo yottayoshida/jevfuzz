@@ -10,7 +10,7 @@ input pair, and keeps it as a regression test.
 declared relation. PASS describes the observations made; it does not prove the
 answer correct.
 
-This branch is **v0.9 development**, with field validation still pending.
+The next package version is **v0.2.0**, with field validation still pending.
 The published stable release is [v0.1.0](https://github.com/yottayoshida/jevfuzz/releases/tag/v0.1.0).
 
 ## Start
