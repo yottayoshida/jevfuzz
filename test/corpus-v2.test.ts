@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import { addToCorpus, checkCorpus, initializeCorpus, inspectCorpus, triageCorpus } from '../src/corpus/index.ts';
 import { readJson, writePrivate } from '../src/storage.ts';
 import { ExecutionJournal } from '../src/engine/journal.ts';
@@ -12,7 +13,8 @@ import { FakeProvider } from '../src/provider.ts';
 import type { Contract, Finding, Observation, Phase } from '../src/campaign-types.ts';
 import type { JevResponse } from '../src/types.ts';
 
-const root = `/private/tmp/jevfuzz-corpus-${process.pid}`;
+const root = await mkdtemp(join(tmpdir(), 'jevfuzz-corpus-'));
+after(() => rm(root, { recursive: true, force: true }));
 const contract: Contract = { id: 'route', question: 'route', relation: 'invariant', projection: 'choice', mutations: ['question_id_rename'], admissibility: 'structural', assumptions: [], required: true };
 const oracle = { profile: 'paired-v1' as const, pairs: 1, minimumSupport: 1, maxControlViolationRate: 0, minimumEffect: 0, alpha: .05, originalSlots: 0, shrinkSlots: 0 };
 function provider(model = 'sim') { return new FakeProvider((request) => { const id = Object.keys(request.questions)[0]!, choice = id === 'route' ? 'billing' : 'general'; return { model, answers: { [id]: { type: 'choice', choice, probabilities: { billing: choice === 'billing' ? 1 : 0, general: choice === 'general' ? 1 : 0 }, confidence: 1 } }, usage: { input_tokens: 0, output_tokens: 0 } }; }); }

@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdir, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import { loadFinding, saveFinding, validateFinding } from '../src/artifacts-v2.ts';
 import { buildCandidate } from '../src/mutators/index.ts';
 import { confirmCandidate, createFinding } from '../src/oracles/index.ts';
@@ -10,7 +11,8 @@ import { evaluateRelation } from '../src/contracts/index.ts';
 import type { Contract, Finding, Observation, Phase } from '../src/campaign-types.ts';
 import type { JevResponse } from '../src/types.ts';
 
-const directory = `/private/tmp/jevfuzz-artifact-${process.pid}`;
+const directory = await mkdtemp(join(tmpdir(), 'jevfuzz-artifact-'));
+after(() => rm(directory, { recursive: true, force: true }));
 const seed = { id: 's', mutations: { builtin: true, unorderedArrays: [], irrelevantFields: [], prosePaths: [] }, request: { model: 'jev-latest', state: { token: 'SENTINEL' }, questions: { route: { type: 'choice' as const, instructions: 'x', criteria: { billing: 'bill', general: 'other' } } } } };
 const contract: Contract = { id: 'c', question: 'route', relation: 'invariant', projection: 'choice', mutations: ['question_id_rename'], admissibility: 'structural', assumptions: [], required: true };
 const oracle = { profile: 'paired-v1' as const, pairs: 1, minimumSupport: 1, maxControlViolationRate: 0, minimumEffect: 0, alpha: .05, originalSlots: 0, shrinkSlots: 0 };
