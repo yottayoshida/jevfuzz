@@ -1,11 +1,12 @@
-# v0.9 implementation and evidence ledger
+# v0.2.0 implementation and evidence ledger
 
-Status: local implementation of the v0.9 design scope; package version `0.2.0`. Mandatory field
-acceptance and current live conformance remain outstanding. This is not a
-release announcement or evidence of external adoption.
+Package version: `0.2.0`. The v0.9 labels below refer to design milestones,
+not the package release number. Mandatory field acceptance and current live
+conformance remain outstanding; local implementation does not establish
+external adoption or complete v0.9 acceptance.
 
-Design authority: the five documents in
-`/Users/i.yoshida/Documents/ChatGPT/jev/docs/jevfuzz-v1/`, dated 2026-09-22.
+Design authority: the JevFuzz v1 product policy, detailed design, roadmap,
+benchmark plan, and evidence notes, dated 2026-09-22.
 Baseline: released v0.1.0, commit `c027851a25f8000a6368e9f11cae5209d3ddd2b9`.
 The released compatibility snapshot is retained in `fixtures/compat-v01`.
 Current local tests: 171 passed, zero failed/skipped on Node 22.18.0, 24.0.0,
@@ -76,10 +77,10 @@ reviewer: Terra/high/read-only. Tool-selected roles and available runtime
 observations will be recorded; unavailable runtime metadata is unknown.
 Planner's initial attempt hit capacity and was retried on the same route.
 
-Local implementation and tests are authorized. v0.9 push, release, registry
-publication, deployment and messages to pilot participants are not included in
-this implementation request. Prior Cloudflare live-validation authorization
-is retained, with bounded experiments and no credential persistence.
+The v0.2.0 release verification covers the source suite, clean package installs,
+and bounded Cloudflare experiments when credentials are available. Credentials
+are never persisted. Offline adapter checks and live observations are recorded
+separately.
 
 ## Local verification record
 
@@ -150,11 +151,12 @@ censoring. Original measurement code and summaries are retained, and corrected
 analysis binds their hashes. This historical run cannot promote feedback;
 no family met the 25% threshold in the corrected comparison anyway. Uniform
 remains the default. `benchmark-v09.md` records commands and limitations.
-## Publication
+## Distribution
 
-No v0.9 push, merge, release, npm publication, deployment, or contact with
-  external users has been performed. These external operations need explicit
-  operation-and-target authorization.
+Release artifacts and publication status are recorded in
+[GitHub Releases](https://github.com/yottayoshida/jevfuzz/releases).
+This package's release number does not claim completion of the outstanding
+field acceptance criteria above.
 
 ## Verification tooling limitation
 

@@ -10,14 +10,15 @@ input pair, and keeps it as a regression test.
 declared relation. PASS describes the observations made; it does not prove the
 answer correct.
 
-The next package version is **v0.2.0**, with field validation still pending.
-The published stable release is [v0.1.0](https://github.com/yottayoshida/jevfuzz/releases/tag/v0.1.0).
+Current package: **v0.2.0**. External field validation remains pending.
 
 ## Start
 
-Node **22.18+**. No runtime dependencies.
+From source. Node **22.18+**. No runtime dependencies.
 
 ```sh
+git clone https://github.com/yottayoshida/jevfuzz.git
+cd jevfuzz
 npm ci
 npm run build
 alias jevfuzz='node dist/cli/main.js'

@@ -24,7 +24,7 @@ add`, `check`, and `report`. The preload replaces `globalThis.fetch`, so no
 external API call is possible. It records and asserts the TypeSafe endpoint,
 raw JSON payload, bearer authorization, and `Cache-Control: no-cache, no-store`.
 
-Local verification on 2026-09-23 passed on Node **22.18.0**, **24.0.0**,
+Local v0.2.0 verification on 2026-09-23 passed on Node **22.18.0**, **24.0.0**,
 and **26.7.0**. Each clean installation had zero production dependencies and
 made 44 intercepted HTTP calls. No request reached a live provider. The command
 also replays the nested shrink result and explicitly triages the corpus entry;

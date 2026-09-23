@@ -1,10 +1,10 @@
-# v0.9 migration
+# v0.2 migration
 
 Node 22.18 or newer is required. Version-1 fixtures remain readable through
 `jevfuzz plan`, `run`, and `replay`; existing exports are not removed. Version-2
 campaigns add `fuzz`, `check`, `shrink`, `corpus`, `report`, and `compare`.
 
-| v0.1 | v0.9 |
+| v0.1 | v0.2 |
 | --- | --- |
 | case/mutation fixture | campaign seed plus concrete witness recipe |
 | comparison result | fresh A/A′/B confirmation and Finding |
@@ -63,7 +63,7 @@ removes unreferenced objects.
 Exit codes: 0 means no detected violation in the executed scope; 1 means a
 confirmed violation; 2 means configuration/runtime/incomplete execution;
 3 means inconclusive, unavailable confirmation, or an empty required scope.
-No v1 exports or commands are deprecated in this development candidate.
+No v1 exports or commands are deprecated in v0.2.0.
 
 `shrink` reserves 96 screening calls and a separate `3 × pairs` final-confirmation
 budget by default. `--shrink-requests <n>` changes only the screening budget.
