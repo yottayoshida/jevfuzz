@@ -59,3 +59,34 @@ test('reduces an individual rename mapping while retaining the failing rename wi
 test('uses the finding provider when rebuilding Cloudflare and TypeSafe candidates', async () => { for (const provider of ['cloudflare', 'typesafe'] as const) { const source = finding(); source.provider = provider; source.candidate = buildCandidate({ id: 'seed', mutations: { builtin: true, unorderedArrays: [], irrelevantFields: [], prosePaths: [] }, request: JSON.parse(source.candidate.basePayload) }, source.candidate.recipe, [contract], undefined, provider); const result = await shrinkFinding(source, executor(), ledger()); assert.equal(result.status, 'reduced'); assert.equal(result.finding.provider, provider); assert.equal(result.finding.candidate.targetHash, source.candidate.targetHash); } });
 test('returns budget_limited after accepting a reduction when no complete neighbourhood remains', async () => { const budget = ledger(3), e = executor(), evaluate = e.evaluate; let shrinkCalls = 0; e.evaluate = async (payload, phase) => { const observation = await evaluate(payload, phase); if (phase === 'shrink' && ++shrinkCalls === 3) { const reservation = budget.reserve('shrink', 'logical', 'test-shrink-exhaustion'); budget.dispatch(reservation.id); budget.settle(reservation.id, 'known'); } return observation; }; const result = await shrinkFinding(finding([inject, rename]), e, budget); assert.equal(result.accepted, 1); assert.equal(result.status, 'budget_limited'); assert.equal(result.finding.parentFindingId, 'original'); });
 test('runtime screen failures cannot certify local minimality', async () => { const e = executor(); e.evaluate = async () => { throw new Error('transport failed'); }; const result = await shrinkFinding(finding(), e, ledger()); assert.equal(result.status, 'unconfirmed'); assert.equal(result.history[0]!.reason, 'screen-incomplete'); });
+
+test('shrinks object-key permutations and removes unnecessary object-order witnesses with fresh confirmation', async () => {
+  const original = finding(undefined, { independentQuestions: false, optionalStatePaths: [], unorderedArrayPaths: [], prosePaths: [] });
+  original.contract = { ...contract, mutations: ['object_key_order'], admissibility: 'declared', assumptions: ['Object member order preserves meaning.'] };
+  const request = { model: 'jev-latest', state: { relevant: { a: 1, b: 2, c: 3 }, irrelevant: { x: 1, y: 2 } }, questions: { route: { type: 'choice' as const, instructions: 'route', criteria: { billing: 'bill', general: 'other' } } } };
+  const order: MutationStep = { operator: 'object_key_order', version: '1', admissibility: 'structural', orders: [{ path: '$.state.relevant', order: ['c', 'a', 'b'] }, { path: '$.state.irrelevant', order: ['y', 'x'] }], reads: ['$.state'], writes: ['$.state'], requires: [], invalidates: [] };
+  original.candidate = buildCandidate({ id: 'seed', request, mutations: { builtin: true, unorderedArrays: [], irrelevantFields: [], prosePaths: [] } }, [order], [original.contract]);
+  const phases: Phase[] = [];
+  const e = { modelChanged: false, async evaluate(payload: string, phase: Phase): Promise<Observation> {
+    const input = JSON.parse(payload), choice = Object.keys(input.state.relevant)[0] === 'a' ? 'billing' : 'general';
+    phases.push(phase);
+    const response: JevResponse = { model: 'sim', answers: { route: { type: 'choice', choice, probabilities: { billing: choice === 'billing' ? 1 : 0, general: choice === 'general' ? 1 : 0 }, confidence: 1 } }, usage: { input_tokens: 0, output_tokens: 0 } };
+    return { id: `object-o${phases.length}`, operationId: `object-p${phases.length}`, phase, wireHash: createHash('sha256').update(payload).digest('hex'), response, provider: 'sim', observedModel: 'sim', cache: 'fresh' };
+  } };
+  const limited = await shrinkFinding(original, e, ledger(0));
+  assert.equal(limited.status, 'budget_limited');
+  assert.equal(phases.length, 0);
+  const result = await shrinkFinding(original, e, ledger());
+  assert.equal(result.status, 'reduced');
+  assert.equal(result.originalComplexity[1], 5);
+  assert.equal(result.finalComplexity[1], 2);
+  assert.deepEqual(result.finding.candidate.recipe[0]!.orders, [{ path: '$.state.relevant', order: ['c', 'b', 'a'] }]);
+  assert.equal(result.finding.candidate.targetHash, original.candidate.targetHash);
+  assert.deepEqual(result.finding.contract, original.contract);
+  assert.deepEqual(JSON.parse(result.finding.candidate.basePayload), JSON.parse(result.finding.candidate.mutantPayload));
+  assert.equal(result.finding.confirmation.verdict, 'FAIL');
+  assert.equal(result.finding.parentFindingId, original.id);
+  assert.deepEqual(phases.slice(-3), ['final-confirmation', 'final-confirmation', 'final-confirmation']);
+  assert.ok(result.history.some(step => step.accepted && step.reason.startsWith('remove-object-order:')));
+  assert.ok(result.history.some(step => step.accepted && step.reason.startsWith('restore-object-order:')));
+});

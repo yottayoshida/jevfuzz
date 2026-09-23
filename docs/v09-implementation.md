@@ -1,15 +1,15 @@
 # v0.2.0 implementation and evidence ledger
 
 Package version: `0.2.0`. The v0.9 labels below refer to design milestones,
-not the package release number. Mandatory field acceptance and current live
-conformance remain outstanding; local implementation does not establish
-external adoption or complete v0.9 acceptance.
+not the package release number. Bounded Cloudflare live release verification
+passed; mandatory field acceptance and the full provider matrix remain
+outstanding. This does not establish external adoption or complete v0.9 acceptance.
 
 Design authority: the JevFuzz v1 product policy, detailed design, roadmap,
 benchmark plan, and evidence notes, dated 2026-09-22.
 Baseline: released v0.1.0, commit `c027851a25f8000a6368e9f11cae5209d3ddd2b9`.
 The released compatibility snapshot is retained in `fixtures/compat-v01`.
-Current local tests: 171 passed, zero failed/skipped on Node 22.18.0, 24.0.0,
+Current local tests: 172 passed, zero failed/skipped on Node 22.18.0, 24.0.0,
 and 26.7.0 (2026-09-23). See the verification record below.
 
 ## Slices and acceptance properties
@@ -84,7 +84,9 @@ separately.
 
 ## Local verification record
 
-All evidence below is local, including the offline HTTP-adapter package test.
+The source and package checks below are local, including the offline HTTP-adapter package test.
+Fresh Cloudflare release observations are recorded separately in
+[provider conformance](provider-conformance.md#v020-cloudflare-live-verification--2026-09-23).
 No mandatory test is skipped. The current suite includes actual child-process
 SIGKILL recovery, corpus quota exhaustion with zero further dispatch, strict
 artifact imports, provider identity, fixed-stat integer reference cases, and
@@ -92,9 +94,9 @@ independent fresh final shrink confirmation.
 
 | Command | Observed result |
 | --- | --- |
-| `npm test` | Node 26.7.0: 171/171, exit 0 |
-| `npm exec --offline --package=node@22.18.0 -- node --test test/*.test.ts` | 171/171, exit 0 |
-| `npm exec --offline --package=node@24.0.0 -- node --test test/*.test.ts` | 171/171, exit 0 |
+| `npm test` | Node 26.7.0: 172/172, exit 0 |
+| `npm exec --offline --package=node@22.18.0 -- node --test test/*.test.ts` | 172/172, exit 0 |
+| `npm exec --offline --package=node@24.0.0 -- node --test test/*.test.ts` | 172/172, exit 0 |
 | `npm run typecheck` | exit 0 |
 | `npm run build` | exit 0 |
 | `git diff --check` | exit 0 |
@@ -132,10 +134,10 @@ reviews are local evidence, not GitHub reviews.
 - M03 usability observation and M09-05: three real workload families, two
   external users, two real counterexample → fix → regression loops. Bundled
   synthetic routing/filter/risk examples and the demo do not satisfy this.
-- M09-02 live conformance: no v0.9 live provider result is claimed. The current
-  environment has no supplied credential configuration. TypeSafe and Cloudflare
-  adapter tests are deterministic offline tests; live cache freshness remains
-  unknown and fixed-stat is refused for those adapters.
+- M09-02 full provider conformance: bounded Cloudflare v0.2.0 live verification
+  passed (138 logical / HTTP calls), including fresh replay, an actual permutation
+  reduction, and a corpus regression check. TypeSafe-direct live behavior and
+  cache freshness remain unverified; fixed-stat is refused for both HTTP adapters.
 ## Local benchmark evidence
 
 M04-07/M09-06 local simulator acceptance passed: 6,000 trials (12 families ×

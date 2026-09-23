@@ -19,6 +19,10 @@ function complexity(candidate: Candidate): number[] {
   const base = JSON.parse(candidate.basePayload) as JevRequest; let moved = 0, renamed = 0;
   for (const step of candidate.recipe) {
     if (step.renames) renamed += Object.keys(step.renames).length;
+    if (step.operator === 'object_key_order') for (const entry of step.orders ?? []) {
+      const value = atPath(base, entry.path);
+      if (value && typeof value === 'object' && !Array.isArray(value)) moved += moves(entry.order, Object.keys(value));
+    }
     if (!step.order) continue;
     if (step.operator === 'question_order') moved += moves(step.order, Object.keys(base.questions));
     else if (step.operator === 'choice_criteria_order' && step.question) { const q = base.questions[step.question]; moved += moves(step.order, q?.type === 'choice' ? Object.keys(q.criteria) : []); }
@@ -78,6 +82,25 @@ function variants(finding: Finding): { candidate: Candidate; reason: string }[] 
     parent[tokens.at(-1)!] = normalized; add(request, finding.candidate.recipe, `normalize-prose-whitespace:${path}`, true);
   }
   finding.candidate.recipe.forEach((step, recipeIndex) => {
+    if (step.operator === 'object_key_order') for (const [orderIndex, entry] of (step.orders ?? []).entries()) {
+      if (step.orders!.length > 1) {
+        const recipe = structuredClone(finding.candidate.recipe);
+        recipe[recipeIndex]!.orders = recipe[recipeIndex]!.orders!.filter((_, index) => index !== orderIndex);
+        add(structuredClone(base), recipe, `remove-object-order:${recipeIndex}:${orderIndex}`);
+      }
+      const value = atPath(base, entry.path);
+      if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+      const identity = Object.keys(value);
+      if (entry.order.length !== identity.length) continue;
+      for (let index = 0; index < entry.order.length; index++) {
+        if (entry.order[index] === identity[index]) continue;
+        const other = entry.order.indexOf(identity[index]!); if (other < 0) continue;
+        const recipe = structuredClone(finding.candidate.recipe), order = [...entry.order];
+        [order[index], order[other]] = [order[other]!, order[index]!];
+        recipe[recipeIndex]!.orders![orderIndex] = { ...entry, order };
+        add(structuredClone(base), recipe, `restore-object-order:${recipeIndex}:${orderIndex}:${index}`);
+      }
+    }
     const identity = identityOrder(step, base); if (!step.order || !identity || step.order.length !== identity.length) return;
     for (let index = 0; index < step.order.length; index++) { if (step.order[index] === identity[index]) continue; const other = step.order.indexOf(identity[index]!); if (other < 0) continue; const recipe = structuredClone(finding.candidate.recipe), order = [...step.order]; [order[index], order[other]] = [order[other]!, order[index]!]; recipe[recipeIndex] = { ...recipe[recipeIndex]!, order }; add(structuredClone(base), recipe, `restore-order:${recipeIndex}:${index}`); }
   });

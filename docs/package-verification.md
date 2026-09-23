@@ -30,7 +30,7 @@ made 44 intercepted HTTP calls. No request reached a live provider. The command
 also replays the nested shrink result and explicitly triages the corpus entry;
 these are separate installed-bin invocations.
 
-The complete source suite passed 171 tests on each runtime with zero skips.
+The complete source suite passed 172 tests on each runtime with zero skips.
 Node 24.0 prints its experimental TypeScript-stripping warning for source tests;
 the distributed CLI is compiled JavaScript. Package SHA-256 is emitted by each
 verification run and identifies that exact tarball, including its documentation.
