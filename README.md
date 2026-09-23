@@ -1,77 +1,57 @@
 # JevFuzz
 
-> Change the order. Check the decision.
+> Find the input that changes the decision. Shrink it. Keep it.
 
-JevFuzz renames question IDs and reorders questions, Choice options and JSON
-keys inside decision content, then checks whether Jev changes its answer. It measures the baseline
-first, confirms suspected failures, and saves a case you can replay.
+JevFuzz tests Jev decision functions with reproducible input transformations.
+It confirms suspected contract violations with new observations, shrinks the
+input pair, and keeps it as a regression test.
 
-**Judgment stability, not factual correctness.** A FAIL means an invariant was
-violated; a PASS does not prove the original answer correct. Built-in mutations
-do not intentionally change meaning. Baseline instability is reported separately
-from changes caused by a mutation.
+**Judgment stability, not factual correctness.** A confirmed FAIL breaks a
+declared relation. PASS describes the observations made; it does not prove the
+answer correct.
 
-One real result, reproduced in an independent replay:
+Current package: **v0.2.0**. External field validation remains pending.
 
-```text
-relevance object_key_order / reverse: FAIL
-  confirmed: baseline 3/3 unrelated
-    mutated 3/3 may_violate
-```
+## Start
 
-[Live results](https://github.com/yottayoshida/jevfuzz/blob/v0.1.0/docs/verification.md): 10 states, 100 mutations, six confirmed
-violations. JevFuzz measures robustness; it does not decide which answer is right.
-
-## Quick start
-
-Node.js **22.18+**. No runtime dependencies. Install the release tarball:
+From source. Node **22.18+**. No runtime dependencies.
 
 ```sh
-npm install -g https://github.com/yottayoshida/jevfuzz/releases/download/v0.1.0/jevfuzz-0.1.0.tgz
-export TYPESAFE_API_KEY=...
-cat > case.json <<'JSON'
-{"state":"The sky is blue.","model":"jev-latest","questions":{"blue":{"type":"noul","instructions":"Is the sky described as blue?"}}}
-JSON
-jevfuzz plan case.json --seed 42
-jevfuzz run case.json --seed 42
+git clone https://github.com/yottayoshida/jevfuzz.git
+cd jevfuzz
+npm ci
+npm run build
+alias jevfuzz='node dist/cli/main.js'
+export CLOUDFLARE_ACCOUNT_ID=...
+export CLOUDFLARE_API_TOKEN=...
+jevfuzz plan fixtures/v2/routing.campaign.json
+jevfuzz fuzz fixtures/v2/routing.campaign.json
 ```
 
-`plan` makes no API calls. `run` checks the worst-case request budget before
-spending anything; set it with `--max-requests`. Retries count separately and can
-incur additional charges. [Build from source and every flag](https://github.com/yottayoshida/jevfuzz/blob/v0.1.0/docs/cli.md).
+The example uses Cloudflare Jev. TypeSafe is also supported.
+`plan` makes zero API calls and shows separate request, retry, confirmation,
+and shrink budgets.
 
-For Cloudflare Jev, set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`, then add
-`--provider cloudflare`. TypeSafe is the default; there is no provider fallback.
-
-## Commands
+## Keep a counterexample
 
 ```sh
-jevfuzz doctor
-jevfuzz plan case.json --seed 42
-jevfuzz run case.json --seed 42 --max-requests 100
-jevfuzz replay .jevfuzz/runs/<run-id>/failures/F001.json
-jevfuzz import /tmp/intent-review-jev.jsonl --out fixtures/imported
+jevfuzz shrink finding.json --out smaller.json
+jevfuzz corpus add smaller.json --corpus .jevfuzz/corpus
+jevfuzz corpus triage .jevfuzz/corpus <id> --status accepted_regression --actor me --reason "Reviewed relation"
+jevfuzz check .jevfuzz/corpus
+jevfuzz report smaller.json --format html --out smaller.html
 ```
 
-Choice, Noul and Score are supported. Array shuffling and irrelevant-field
-injection require your explicit declaration. Suspected failures are rerun;
-unstable baselines and model changes are INCONCLUSIVE.
+Choice, Noul, Score, and declarative production policies are supported.
+Uniform search is the default; feedback search remains experimental.
+Version 1 `run`, configs, reports, and failure replay remain supported.
 
-Exit codes: **0** no FAIL, **1** confirmed FAIL, **2** runtime/configuration error,
-**3** no reliable verdict. Reports distinguish PASS, WARN, FAIL and INCONCLUSIVE.
+Artifacts stay local with private permissions. Full artifacts contain prompts
+and source data; redacted and hash-only modes are not replayable.
+No telemetry or automatic uploads.
 
-Artifacts stay in `.jevfuzz/` with private file permissions. They can contain
-source and prompts: keep that directory ignored. `--no-save-payloads` saves only
-hashes and summaries and disables replay. No telemetry or automatic uploads.
-
-## Documentation
-
-- [CLI, providers and library](https://github.com/yottayoshida/jevfuzz/blob/v0.1.0/docs/cli.md)
-- [Mutation safety](https://github.com/yottayoshida/jevfuzz/blob/v0.1.0/docs/mutation-safety.md)
-- [Design](https://github.com/yottayoshida/jevfuzz/blob/v0.1.0/docs/design.md) · [PRD](https://github.com/yottayoshida/jevfuzz/blob/v0.1.0/docs/PRD.md) · [Verification](https://github.com/yottayoshida/jevfuzz/blob/v0.1.0/docs/verification.md)
-- [jev-intent-review trace export](https://github.com/yottayoshida/jev-intent-review/pull/56)
-
-Run `npm test`, `npm run typecheck`, and `npm run build` for offline verification.
-`npm run test:live` explicitly opts into paid API calls.
-
-[MIT](LICENSE).
+[CLI and migration](docs/v09-migration.md) ·
+[Provider evidence](docs/provider-conformance.md) ·
+[Benchmark protocol](docs/benchmark-v09.md) ·
+[Offline demo](docs/demo-v09.md) ·
+[Implementation status](docs/v09-implementation.md) · [MIT](LICENSE)

@@ -1,0 +1,68 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "kind",
+    "name",
+    "cases",
+    "old",
+    "new",
+    "oracle",
+    "budget"
+  ],
+  "properties": {
+    "version": {
+      "const": 2
+    },
+    "kind": {
+      "const": "experiment"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "candidate",
+          "contract"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "candidate": {
+            "$ref": "artifacts-v2.schema.json#/$defs/candidate"
+          },
+          "contract": {
+            "$ref": "artifacts-v2.schema.json#/$defs/contract"
+          }
+        }
+      }
+    },
+    "old": {
+      "$ref": "artifacts-v2.schema.json#/$defs/target"
+    },
+    "new": {
+      "$ref": "artifacts-v2.schema.json#/$defs/target"
+    },
+    "oracle": {
+      "$ref": "artifacts-v2.schema.json#/$defs/oracle"
+    },
+    "budget": {
+      "$ref": "campaign-v2.schema.json#/$defs/budget"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jevfuzz.dev/schema/experiment-v2.schema.json"
+}

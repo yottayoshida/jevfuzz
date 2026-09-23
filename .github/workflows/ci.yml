@@ -18,5 +18,6 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - run: node scripts/verify-package.ts
       - run: node dist/cli/main.js plan fixtures/live-smoke.jevfuzz.json --seed 42 --json
       - run: npm pack --dry-run

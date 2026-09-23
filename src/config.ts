@@ -1,7 +1,7 @@
-import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import type { FuzzCase, FuzzConfig, Invariant, JevRequest, MutationConfig, Thresholds } from './types.ts';
 import { assert, atPath, FuzzError, integer, pathTokens, record } from './util.ts';
+import { boundedJson, readJson } from './storage.ts';
 
 export const DEFAULT_THRESHOLDS: Thresholds = {
   noulBaselineRange: 0.10, scoreBaselineRange: 0.35, noulThreshold: 0.5,
@@ -15,6 +15,7 @@ function content(value: unknown, nullable = false): boolean {
   return (nullable && value === null) || typeof value === 'string' || Array.isArray(value) || record(value);
 }
 export function validateRequest(value: unknown): JevRequest {
+  boundedJson(value);
   assert(record(value), 'request must be an object');
   keys(value, ['state', 'model', 'questions'], 'request');
   assert(content(value.state), 'state must be string, object or array');
@@ -54,7 +55,7 @@ export function thresholds(invariant: Invariant = {}): Thresholds {
   }
   return result;
 }
-function declaredContentPath(path: string): void {
+export function declaredContentPath(path: string): void {
   const parts = pathTokens(path);
   assert(parts[0] === 'state' || (parts[0] === 'questions' && parts.length >= 3 && ['instructions', 'criteria'].includes(parts[2]!)), 'mutation path must address decision content');
 }
@@ -90,6 +91,7 @@ function mutations(raw: unknown, request: JevRequest): MutationConfig {
   return { builtin: value.builtin ?? true, unorderedArrays: arrays, irrelevantFields: fields, prosePaths: prose } as MutationConfig;
 }
 export function parseConfig(value: unknown, filename = 'request.json'): FuzzConfig {
+  boundedJson(value, 64, 100_000);
   assert(record(value), 'configuration must be an object');
   if (!Object.hasOwn(value, 'version') && !Object.hasOwn(value, 'cases')) {
     const request = validateRequest(value);
@@ -120,7 +122,7 @@ export function parseConfig(value: unknown, filename = 'request.json'): FuzzConf
 }
 export async function loadConfig(filename: string): Promise<FuzzConfig> {
   let value: unknown;
-  try { value = JSON.parse(await readFile(filename, 'utf8')); }
+  try { value = await readJson(filename, 1_000_000); }
   catch { throw new FuzzError('CONFIG', 'cannot read valid JSON configuration'); }
   return parseConfig(value, filename);
 }

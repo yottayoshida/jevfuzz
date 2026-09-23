@@ -1,9 +1,10 @@
-import { open, lstat, mkdir, readFile, rename, rm } from 'node:fs/promises';
+import { open, lstat, mkdir, rename, rm } from 'node:fs/promises';
 import { join, parse, resolve } from 'node:path';
 import type { DecisionProvider, FailureArtifact, FuzzConfig, FuzzReport, Mutation, RunOptions } from './types.ts';
 import { parseConfig, thresholds, validateRequest } from './config.ts';
 import { run, RunInterruptedError } from './runner.ts';
 import { assert, FuzzError, hash, integer, record } from './util.ts';
+import { parseBoundedJson, readBoundedText, readJson } from './storage.ts';
 
 async function status(path: string) {
   try { return await lstat(path); } catch (error: unknown) {
@@ -173,7 +174,7 @@ function validateArtifact(value: unknown): FailureArtifact {
 
 export async function loadFailure(file: string): Promise<FailureArtifact> {
   let parsed: unknown;
-  try { parsed = JSON.parse(await readFile(file, 'utf8')); } catch { throw new FuzzError('CONFIG', 'cannot read valid failure artifact'); }
+  try { parsed = await readJson(file, 8 * 1024 * 1024); } catch { throw new FuzzError('CONFIG', 'cannot read valid failure artifact'); }
   return validateArtifact(parsed);
 }
 
@@ -199,10 +200,10 @@ export async function replay(rawArtifact: FailureArtifact, provider: DecisionPro
 /** Import Jev Intent Review JSONL requests, discarding all historical responses. */
 export async function importTrace(file: string, outDir: string): Promise<string[]> {
   let lines: string[];
-  try { lines = (await readFile(file, 'utf8')).split(/\r?\n/).filter(Boolean); } catch { throw new FuzzError('CONFIG', 'cannot read trace file'); }
+  try { lines = (await readBoundedText(file, 8 * 1024 * 1024)).split(/\r?\n/).filter(Boolean); } catch { throw new FuzzError('CONFIG', 'cannot read trace file'); }
   const configs: { id: string; config: FuzzConfig }[] = lines.map((line, index) => {
     let trace: unknown;
-    try { trace = JSON.parse(line); } catch { throw new FuzzError('CONFIG', `invalid trace JSONL line ${index + 1}`); }
+    try { trace = parseBoundedJson(line, 8 * 1024 * 1024); } catch { throw new FuzzError('CONFIG', `invalid trace JSONL line ${index + 1}`); }
     assert(record(trace) && trace.version === 1 && trace.source === 'jev-intent-review' && Object.hasOwn(trace, 'request') && typeof trace.timestamp === 'string' && Number.isFinite(Date.parse(trace.timestamp)) && record(trace.response), `invalid trace line ${index + 1}`);
     const id = `intent-review-${String(index + 1).padStart(4, '0')}`;
     return { id, config: parseConfig({ version: 1, name: id, cases: [{ id, request: trace.request }] }, `${id}.jevfuzz.json`) };

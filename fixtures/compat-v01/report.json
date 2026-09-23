@@ -1,0 +1,581 @@
+{
+  "version": 1,
+  "run": {
+    "id": "8162eeaa-45dc-4536-b942-367c30020d99",
+    "timestamp": "2026-09-23T03:11:29.722Z",
+    "seed": 7,
+    "jevfuzzVersion": "0.1.0",
+    "nodeVersion": "v26.7.0",
+    "mode": "fake",
+    "providerMode": "fake",
+    "requestedModels": [
+      "jev-latest"
+    ],
+    "observedModels": [
+      "v01-position-sensitive"
+    ],
+    "modelChanged": false,
+    "configHash": "93b9447ceb636f3baca2baca91f1c82b292b12fc766535e54f303196107fbd38",
+    "options": {
+      "seed": 7,
+      "baselineRuns": 2,
+      "confirmRuns": 2,
+      "concurrency": 1,
+      "maxRequests": 100
+    },
+    "status": "complete",
+    "observedModel": "v01-position-sensitive"
+  },
+  "summary": {
+    "cases": 1,
+    "questions": 2,
+    "mutations": 3,
+    "pass": 2,
+    "warn": 0,
+    "fail": 4,
+    "inconclusive": 0,
+    "logicalRequests": 9,
+    "httpAttempts": 0,
+    "usage": {
+      "inputTokens": 9,
+      "outputTokens": 9
+    },
+    "httpRetries": 0
+  },
+  "cases": [
+    {
+      "id": "position-sensitive",
+      "caseHash": "93c41e63358333c5c2749c14e72435dcc3c7c14af72f091197239aa455a1222f",
+      "baselineRequestHash": "094d72a1a2308d8310b06f1bd4df00589cffd8487c5d99435132cb0fb6b71567",
+      "baselineRequest": {
+        "state": {
+          "subject": "compatibility fixture",
+          "priority": "normal"
+        },
+        "questions": {
+          "route": {
+            "type": "noul",
+            "instructions": "Route this request."
+          },
+          "audit": {
+            "type": "noul",
+            "instructions": "Record an audit decision."
+          }
+        },
+        "model": "jev-latest"
+      },
+      "baselineResponses": [
+        {
+          "model": "v01-position-sensitive",
+          "answers": {
+            "route": {
+              "type": "noul",
+              "noul": 0.1
+            },
+            "audit": {
+              "type": "noul",
+              "noul": 0.1
+            }
+          },
+          "usage": {
+            "input_tokens": 1,
+            "output_tokens": 1
+          }
+        },
+        {
+          "model": "v01-position-sensitive",
+          "answers": {
+            "route": {
+              "type": "noul",
+              "noul": 0.1
+            },
+            "audit": {
+              "type": "noul",
+              "noul": 0.1
+            }
+          },
+          "usage": {
+            "input_tokens": 1,
+            "output_tokens": 1
+          }
+        }
+      ],
+      "baseline": {
+        "route": {
+          "type": "noul",
+          "runs": 2,
+          "stable": true,
+          "mean": 0.1,
+          "min": 0.1,
+          "max": 0.1,
+          "range": 0
+        },
+        "audit": {
+          "type": "noul",
+          "runs": 2,
+          "stable": true,
+          "mean": 0.1,
+          "min": 0.1,
+          "max": 0.1,
+          "range": 0
+        }
+      },
+      "invariants": {},
+      "thresholds": {
+        "route": {
+          "noulBaselineRange": 0.1,
+          "scoreBaselineRange": 0.35,
+          "noulThreshold": 0.5,
+          "noulMinDelta": 0.15,
+          "scoreDelta": 0.5,
+          "jsDivergence": 0.15,
+          "confidenceDrop": 0.3,
+          "noulProbabilityShift": 0.2
+        },
+        "audit": {
+          "noulBaselineRange": 0.1,
+          "scoreBaselineRange": 0.35,
+          "noulThreshold": 0.5,
+          "noulMinDelta": 0.15,
+          "scoreDelta": 0.5,
+          "jsDivergence": 0.15,
+          "confidenceDrop": 0.3,
+          "noulProbabilityShift": 0.2
+        }
+      },
+      "mutations": [
+        {
+          "id": "M1-1",
+          "mutation": {
+            "type": "question_id_rename",
+            "strategy": "seeded",
+            "seed": 7
+          },
+          "idMap": {
+            "q_7_0_2ff152c": "route",
+            "q_7_1_fdc7f12": "audit"
+          },
+          "requestHash": "de8073e59b696f2e6280c98558d5bdcfb850f74f768919a89ab3f30ccfd89b59",
+          "request": {
+            "state": {
+              "subject": "compatibility fixture",
+              "priority": "normal"
+            },
+            "questions": {
+              "q_7_0_2ff152c": {
+                "type": "noul",
+                "instructions": "Route this request."
+              },
+              "q_7_1_fdc7f12": {
+                "type": "noul",
+                "instructions": "Record an audit decision."
+              }
+            },
+            "model": "jev-latest"
+          },
+          "responses": [
+            {
+              "model": "v01-position-sensitive",
+              "answers": {
+                "q_7_0_2ff152c": {
+                  "type": "noul",
+                  "noul": 0.9
+                },
+                "q_7_1_fdc7f12": {
+                  "type": "noul",
+                  "noul": 0.9
+                }
+              },
+              "usage": {
+                "input_tokens": 1,
+                "output_tokens": 1
+              }
+            },
+            {
+              "model": "v01-position-sensitive",
+              "answers": {
+                "q_7_0_2ff152c": {
+                  "type": "noul",
+                  "noul": 0.9
+                },
+                "q_7_1_fdc7f12": {
+                  "type": "noul",
+                  "noul": 0.9
+                }
+              },
+              "usage": {
+                "input_tokens": 1,
+                "output_tokens": 1
+              }
+            },
+            {
+              "model": "v01-position-sensitive",
+              "answers": {
+                "q_7_0_2ff152c": {
+                  "type": "noul",
+                  "noul": 0.9
+                },
+                "q_7_1_fdc7f12": {
+                  "type": "noul",
+                  "noul": 0.9
+                }
+              },
+              "usage": {
+                "input_tokens": 1,
+                "output_tokens": 1
+              }
+            }
+          ],
+          "comparisons": {
+            "route": {
+              "baseline": {
+                "type": "noul",
+                "runs": 2,
+                "stable": true,
+                "mean": 0.1,
+                "min": 0.1,
+                "max": 0.1,
+                "range": 0
+              },
+              "mutated": {
+                "type": "noul",
+                "runs": 3,
+                "stable": true,
+                "mean": 0.9,
+                "min": 0.9,
+                "max": 0.9,
+                "range": 0
+              },
+              "thresholds": {
+                "noulBaselineRange": 0.1,
+                "scoreBaselineRange": 0.35,
+                "noulThreshold": 0.5,
+                "noulMinDelta": 0.15,
+                "scoreDelta": 0.5,
+                "jsDivergence": 0.15,
+                "confidenceDrop": 0.3,
+                "noulProbabilityShift": 0.2
+              },
+              "reproduced": 3,
+              "observations": 3,
+              "verdict": "FAIL",
+              "reason": "FAIL_NOUL_THRESHOLD_FLIP",
+              "warnings": [],
+              "delta": 0.8
+            },
+            "audit": {
+              "baseline": {
+                "type": "noul",
+                "runs": 2,
+                "stable": true,
+                "mean": 0.1,
+                "min": 0.1,
+                "max": 0.1,
+                "range": 0
+              },
+              "mutated": {
+                "type": "noul",
+                "runs": 3,
+                "stable": true,
+                "mean": 0.9,
+                "min": 0.9,
+                "max": 0.9,
+                "range": 0
+              },
+              "thresholds": {
+                "noulBaselineRange": 0.1,
+                "scoreBaselineRange": 0.35,
+                "noulThreshold": 0.5,
+                "noulMinDelta": 0.15,
+                "scoreDelta": 0.5,
+                "jsDivergence": 0.15,
+                "confidenceDrop": 0.3,
+                "noulProbabilityShift": 0.2
+              },
+              "reproduced": 3,
+              "observations": 3,
+              "verdict": "FAIL",
+              "reason": "FAIL_NOUL_THRESHOLD_FLIP",
+              "warnings": [],
+              "delta": 0.8
+            }
+          }
+        },
+        {
+          "id": "M1-2",
+          "mutation": {
+            "type": "question_order",
+            "strategy": "reverse",
+            "seed": 7
+          },
+          "idMap": {},
+          "requestHash": "86488e9e81d350b8c06a40196bb3a2eaaf5a29f6d3290af0dfda6598e25ae6ef",
+          "request": {
+            "state": {
+              "subject": "compatibility fixture",
+              "priority": "normal"
+            },
+            "questions": {
+              "audit": {
+                "type": "noul",
+                "instructions": "Record an audit decision."
+              },
+              "route": {
+                "type": "noul",
+                "instructions": "Route this request."
+              }
+            },
+            "model": "jev-latest"
+          },
+          "responses": [
+            {
+              "model": "v01-position-sensitive",
+              "answers": {
+                "audit": {
+                  "type": "noul",
+                  "noul": 0.9
+                },
+                "route": {
+                  "type": "noul",
+                  "noul": 0.9
+                }
+              },
+              "usage": {
+                "input_tokens": 1,
+                "output_tokens": 1
+              }
+            },
+            {
+              "model": "v01-position-sensitive",
+              "answers": {
+                "audit": {
+                  "type": "noul",
+                  "noul": 0.9
+                },
+                "route": {
+                  "type": "noul",
+                  "noul": 0.9
+                }
+              },
+              "usage": {
+                "input_tokens": 1,
+                "output_tokens": 1
+              }
+            },
+            {
+              "model": "v01-position-sensitive",
+              "answers": {
+                "audit": {
+                  "type": "noul",
+                  "noul": 0.9
+                },
+                "route": {
+                  "type": "noul",
+                  "noul": 0.9
+                }
+              },
+              "usage": {
+                "input_tokens": 1,
+                "output_tokens": 1
+              }
+            }
+          ],
+          "comparisons": {
+            "route": {
+              "baseline": {
+                "type": "noul",
+                "runs": 2,
+                "stable": true,
+                "mean": 0.1,
+                "min": 0.1,
+                "max": 0.1,
+                "range": 0
+              },
+              "mutated": {
+                "type": "noul",
+                "runs": 3,
+                "stable": true,
+                "mean": 0.9,
+                "min": 0.9,
+                "max": 0.9,
+                "range": 0
+              },
+              "thresholds": {
+                "noulBaselineRange": 0.1,
+                "scoreBaselineRange": 0.35,
+                "noulThreshold": 0.5,
+                "noulMinDelta": 0.15,
+                "scoreDelta": 0.5,
+                "jsDivergence": 0.15,
+                "confidenceDrop": 0.3,
+                "noulProbabilityShift": 0.2
+              },
+              "reproduced": 3,
+              "observations": 3,
+              "verdict": "FAIL",
+              "reason": "FAIL_NOUL_THRESHOLD_FLIP",
+              "warnings": [],
+              "delta": 0.8
+            },
+            "audit": {
+              "baseline": {
+                "type": "noul",
+                "runs": 2,
+                "stable": true,
+                "mean": 0.1,
+                "min": 0.1,
+                "max": 0.1,
+                "range": 0
+              },
+              "mutated": {
+                "type": "noul",
+                "runs": 3,
+                "stable": true,
+                "mean": 0.9,
+                "min": 0.9,
+                "max": 0.9,
+                "range": 0
+              },
+              "thresholds": {
+                "noulBaselineRange": 0.1,
+                "scoreBaselineRange": 0.35,
+                "noulThreshold": 0.5,
+                "noulMinDelta": 0.15,
+                "scoreDelta": 0.5,
+                "jsDivergence": 0.15,
+                "confidenceDrop": 0.3,
+                "noulProbabilityShift": 0.2
+              },
+              "reproduced": 3,
+              "observations": 3,
+              "verdict": "FAIL",
+              "reason": "FAIL_NOUL_THRESHOLD_FLIP",
+              "warnings": [],
+              "delta": 0.8
+            }
+          }
+        },
+        {
+          "id": "M1-3",
+          "mutation": {
+            "type": "object_key_order",
+            "strategy": "reverse",
+            "seed": 7
+          },
+          "idMap": {},
+          "requestHash": "6813dc05f83ad54d75864053275ee3fbc6959e6c412ce2bf5eaf52c74bee8caf",
+          "request": {
+            "state": {
+              "priority": "normal",
+              "subject": "compatibility fixture"
+            },
+            "questions": {
+              "route": {
+                "type": "noul",
+                "instructions": "Route this request."
+              },
+              "audit": {
+                "type": "noul",
+                "instructions": "Record an audit decision."
+              }
+            },
+            "model": "jev-latest"
+          },
+          "responses": [
+            {
+              "model": "v01-position-sensitive",
+              "answers": {
+                "route": {
+                  "type": "noul",
+                  "noul": 0.1
+                },
+                "audit": {
+                  "type": "noul",
+                  "noul": 0.1
+                }
+              },
+              "usage": {
+                "input_tokens": 1,
+                "output_tokens": 1
+              }
+            }
+          ],
+          "comparisons": {
+            "route": {
+              "baseline": {
+                "type": "noul",
+                "runs": 2,
+                "stable": true,
+                "mean": 0.1,
+                "min": 0.1,
+                "max": 0.1,
+                "range": 0
+              },
+              "mutated": {
+                "type": "noul",
+                "runs": 1,
+                "stable": true,
+                "mean": 0.1,
+                "min": 0.1,
+                "max": 0.1,
+                "range": 0
+              },
+              "thresholds": {
+                "noulBaselineRange": 0.1,
+                "scoreBaselineRange": 0.35,
+                "noulThreshold": 0.5,
+                "noulMinDelta": 0.15,
+                "scoreDelta": 0.5,
+                "jsDivergence": 0.15,
+                "confidenceDrop": 0.3,
+                "noulProbabilityShift": 0.2
+              },
+              "reproduced": 0,
+              "observations": 1,
+              "verdict": "PASS",
+              "reason": "PASS",
+              "warnings": [],
+              "delta": 0
+            },
+            "audit": {
+              "baseline": {
+                "type": "noul",
+                "runs": 2,
+                "stable": true,
+                "mean": 0.1,
+                "min": 0.1,
+                "max": 0.1,
+                "range": 0
+              },
+              "mutated": {
+                "type": "noul",
+                "runs": 1,
+                "stable": true,
+                "mean": 0.1,
+                "min": 0.1,
+                "max": 0.1,
+                "range": 0
+              },
+              "thresholds": {
+                "noulBaselineRange": 0.1,
+                "scoreBaselineRange": 0.35,
+                "noulThreshold": 0.5,
+                "noulMinDelta": 0.15,
+                "scoreDelta": 0.5,
+                "jsDivergence": 0.15,
+                "confidenceDrop": 0.3,
+                "noulProbabilityShift": 0.2
+              },
+              "reproduced": 0,
+              "observations": 1,
+              "verdict": "PASS",
+              "reason": "PASS",
+              "warnings": [],
+              "delta": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

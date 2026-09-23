@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jevfuzz.dev/schema/common-v2.schema.json",
+  "$defs": {
+    "json": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/json"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/json"
+          }
+        }
+      ]
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "model",
+        "questions"
+      ],
+      "properties": {
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "$ref": "#/$defs/content"
+        },
+        "questions": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/question"
+          }
+        }
+      }
+    },
+    "question": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "instructions",
+            "criteria"
+          ],
+          "properties": {
+            "type": {
+              "const": "choice"
+            },
+            "instructions": {
+              "$ref": "#/$defs/content"
+            },
+            "criteria": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/content"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "minProperties": 1,
+              "maxProperties": 255
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "instructions"
+          ],
+          "properties": {
+            "type": {
+              "const": "noul"
+            },
+            "instructions": {
+              "$ref": "#/$defs/content"
+            },
+            "criteria": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [],
+              "properties": {
+                "true": {
+                  "$ref": "#/$defs/content"
+                },
+                "false": {
+                  "$ref": "#/$defs/content"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "instructions",
+            "criteria"
+          ],
+          "properties": {
+            "type": {
+              "const": "score"
+            },
+            "instructions": {
+              "$ref": "#/$defs/content"
+            },
+            "criteria": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 10,
+              "items": {
+                "$ref": "#/$defs/content"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "mutations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "builtin": {
+          "type": "boolean"
+        },
+        "unorderedArrays": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "irrelevantFields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "field",
+              "values"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "field": {
+                "type": "string"
+              },
+              "values": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/json"
+                }
+              }
+            }
+          }
+        },
+        "prosePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "seed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request": {
+          "$ref": "#/$defs/request"
+        },
+        "mutations": {
+          "$ref": "#/$defs/mutations"
+        },
+        "source": {
+          "type": "string"
+        }
+      }
+    },
+    "content": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/json"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/json"
+          }
+        }
+      ]
+    }
+  }
+}

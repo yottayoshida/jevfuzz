@@ -1,4 +1,5 @@
-import type { DecisionProvider, JevAnswer, JevRequest, JevResponse } from './types.ts';
+import { randomUUID } from 'node:crypto';
+import type { DecisionProvider, EvaluateOptions, JevAnswer, JevRequest, JevResponse, ProviderCapabilities } from './types.ts';
 import { FuzzError, record, rng } from './util.ts';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
@@ -14,12 +15,20 @@ export interface ProviderOptions {
   timeoutMs?: number;
   maxAttempts?: number;
   jitterSeed?: number;
+  maxResponseBytes?: number;
+  maxResponseDepth?: number;
 }
 
 type Environment = Readonly<Record<string, string | undefined>>;
 
 function providerError(code: string, message: string): FuzzError {
   return new FuzzError(code, message);
+}
+
+/** Hooks sit on the durable accounting boundary: retain their machine-readable code,
+ * but never expose an arbitrary hook message through a live provider error. */
+function hookError(error: unknown, fallback: 'STORAGE_LIMIT' | 'PERSISTENCE_ERROR'): FuzzError {
+  return error instanceof FuzzError ? providerError(error.code, 'provider hook failed') : providerError(fallback, 'provider hook failed');
 }
 
 function responseError(): FuzzError {
@@ -176,8 +185,36 @@ function retryAfter(response: Response): number | undefined {
   return Number.isFinite(date) ? Math.max(0, date - Date.now()) : undefined;
 }
 
+function withinDepth(value: unknown, maximum: number): boolean {
+  const pending: { value: unknown; depth: number }[] = [{ value, depth: 0 }];
+  while (pending.length) {
+    const item = pending.pop()!;
+    if (item.depth > maximum) return false;
+    if (item.value !== null && typeof item.value === 'object') for (const child of Array.isArray(item.value) ? item.value : Object.values(item.value)) pending.push({ value: child, depth: item.depth + 1 });
+  }
+  return true;
+}
+
+async function boundedJson(response: Response, maxBytes: number, maxDepth: number): Promise<unknown> {
+  if (!response.body) throw responseError();
+  const reader = response.body.getReader(); let bytes = 0; const chunks: Uint8Array[] = [];
+  try {
+    while (true) {
+      const part = await reader.read(); if (part.done) break;
+      bytes += part.value.byteLength;
+      if (bytes > maxBytes) { await reader.cancel(); throw providerError('PROVIDER_RESPONSE', 'provider response exceeds configured limit'); }
+      chunks.push(part.value);
+    }
+  } finally { reader.releaseLock(); }
+  let value: unknown;
+  try { value = JSON.parse(new TextDecoder().decode(Buffer.concat(chunks))); } catch { throw responseError(); }
+  if (!withinDepth(value, maxDepth)) throw providerError('PROVIDER_RESPONSE', 'provider response exceeds configured depth');
+  return value;
+}
+
 abstract class HttpProvider implements DecisionProvider {
   readonly mode = 'live' as const;
+  readonly capabilities: ProviderCapabilities = { adapterId: 'http', adapterVersion: '1', observedModel: true, probabilities: true, confidence: true, usage: true, httpAccounting: true, byteReplay: true, cancellation: true, cacheMetadata: false, attemptHooks: true };
   #httpAttempts = 0;
   get httpAttempts(): number { return this.#httpAttempts; }
   #httpRetries = 0;
@@ -189,6 +226,8 @@ abstract class HttpProvider implements DecisionProvider {
   readonly #random: () => number;
   readonly #url: string;
   readonly #token: string;
+  readonly #maxResponseBytes: number;
+  readonly #maxResponseDepth: number;
 
   protected constructor(url: string, token: string, options: ProviderOptions = {}) {
     if (!Number.isSafeInteger(options.timeoutMs ?? 20_000) || (options.timeoutMs ?? 20_000) <= 0) throw providerError('PROVIDER_CONFIG', 'invalid timeout');
@@ -197,41 +236,55 @@ abstract class HttpProvider implements DecisionProvider {
     this.#url = url; this.#token = token; this.#fetch = options.fetch ?? fetch;
     this.#sleep = options.sleep ?? realSleep; this.#timeoutMs = options.timeoutMs ?? 20_000;
     this.#maxAttempts = maxAttempts; this.#random = rng(options.jitterSeed ?? 0x4a455646);
+    this.#maxResponseBytes = options.maxResponseBytes ?? 1_000_000; this.#maxResponseDepth = options.maxResponseDepth ?? 64;
+    if (!Number.isSafeInteger(this.#maxResponseBytes) || this.#maxResponseBytes < 1 || !Number.isSafeInteger(this.#maxResponseDepth) || this.#maxResponseDepth < 1) throw providerError('PROVIDER_CONFIG', 'invalid response limits');
   }
 
   protected abstract body(request: JevRequest): unknown;
   protected abstract unpack(raw: unknown): unknown;
 
-  async evaluate(request: JevRequest, options: { signal?: AbortSignal } = {}): Promise<JevResponse> {
-    const payload = JSON.stringify(this.body(request));
+  protected serialize(request: JevRequest, supplied?: string): string { return JSON.stringify(this.body(request)); }
+
+  async evaluate(request: JevRequest, options: EvaluateOptions = {}): Promise<JevResponse> {
+    const payload = this.serialize(request, options.payload);
     for (let attempt = 1; attempt <= this.#maxAttempts; attempt++) {
       if (options.signal?.aborted) throw abortError(options.signal);
       const timeout = AbortSignal.timeout(this.#timeoutMs);
       const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+      let dispatched = false;
+      const attemptInfo = { attemptId: randomUUID(), transportPayload: payload, attempt };
+      const settle = async (outcome: 'known' | 'unknown') => { if (dispatched) { dispatched = false; try { await options.settledAttempt?.({ ...attemptInfo, outcome }); } catch (error) { throw hookError(error, 'STORAGE_LIMIT'); } } };
       try {
         if (attempt > 1) this.#httpRetries++;
+        try { await options.beforeAttempt?.(attemptInfo); } catch (error) { throw hookError(error, 'STORAGE_LIMIT'); }
+        dispatched = true;
         this.#httpAttempts++;
-        const response = await this.#fetch(this.#url, {
-          method: 'POST', headers: { Authorization: `Bearer ${this.#token}`, 'Content-Type': 'application/json' },
-          body: payload, redirect: 'manual', signal,
-        });
-        if (response.status >= 300 && response.status < 400) throw providerError('PROVIDER_HTTP', 'provider rejected a redirect');
+        const init: RequestInit & { cache: 'no-store' } = {
+          method: 'POST', headers: { Authorization: `Bearer ${this.#token}`, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store' },
+          body: payload, redirect: 'manual', cache: 'no-store', signal,
+        };
+        const response = await this.#fetch(this.#url, init);
+        if (response.status >= 300 && response.status < 400) { await settle('known'); throw providerError('PROVIDER_HTTP', 'provider rejected a redirect'); }
         if ((response.status === 429 || response.status === 529) && attempt < this.#maxAttempts) {
+          await settle('known');
           await response.body?.cancel();
           await this.wait(retryAfter(response), attempt, options.signal);
           continue;
         }
-        if (!response.ok) throw providerError('PROVIDER_HTTP', `provider request failed with HTTP ${response.status}`);
+        if (!response.ok) { await settle('known'); throw providerError('PROVIDER_HTTP', `provider request failed with HTTP ${response.status}`); }
         let raw: unknown;
-        try { raw = await response.json(); }
+        try { raw = await boundedJson(response, this.#maxResponseBytes, this.#maxResponseDepth); }
         catch (error) {
+          await settle(signal.aborted ? 'unknown' : 'known');
           if (signal.aborted || !(error instanceof SyntaxError)) throw error;
           throw responseError();
         }
         const normalized = validateResponse(this.unpack(raw), request);
         if (JSON.stringify(normalized).includes(this.#token)) throw providerError('PROVIDER_RESPONSE', 'provider response contains a credential');
+        await settle('known'); try { await options.observedMetadata?.({ cache: 'unknown' }); } catch (error) { throw hookError(error, 'PERSISTENCE_ERROR'); }
         return normalized;
       } catch (error) {
+        if (dispatched) await settle('unknown');
         if (options.signal?.aborted) throw abortError(options.signal);
         if (error instanceof FuzzError) throw error;
         const timedOut = timeout.aborted;
@@ -256,6 +309,7 @@ abstract class HttpProvider implements DecisionProvider {
 export class TypeSafeProvider extends HttpProvider {
   constructor(env: Environment = process.env, options: ProviderOptions = {}) { super(typesafeUrl(env), tokenValue(env, 'TYPESAFE_API_KEY'), options); }
   protected body(request: JevRequest): unknown { return request; }
+  protected serialize(request: JevRequest, supplied?: string): string { return supplied ?? super.serialize(request); }
   protected unpack(raw: unknown): unknown { return raw; }
 }
 
@@ -306,8 +360,9 @@ function defaultResponse(request: JevRequest): JevResponse {
 export class FakeProvider implements DecisionProvider {
   readonly mode = 'fake' as const;
   readonly httpRetries = 0;
+  readonly capabilities: ProviderCapabilities = { adapterId: 'fake', adapterVersion: '1', observedModel: true, probabilities: true, confidence: true, usage: true, httpAccounting: false, byteReplay: true, cancellation: true, cacheMetadata: true };
   #index = 0;
   readonly #handler: (request: JevRequest, index: number) => JevResponse;
   constructor(handler: (request: JevRequest, index: number) => JevResponse = defaultResponse) { this.#handler = handler; }
-  async evaluate(request: JevRequest): Promise<JevResponse> { return validateResponse(this.#handler(request, this.#index++), request); }
+  async evaluate(request: JevRequest, options: EvaluateOptions = {}): Promise<JevResponse> { options.signal?.throwIfAborted(); const result = validateResponse(this.#handler(request, this.#index++), request); await options.observedMetadata?.({ cache: 'fresh' }); return result; }
 }

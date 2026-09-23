@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "name": "ticket-routing",
+  "provider": "cloudflare",
+  "seeds": [{
+    "id": "invoice-ticket",
+    "request": {
+      "state": {"message": "I need an invoice for my subscription.", "locale": "en", "channel": "web"},
+      "model": "jev-latest",
+      "questions": {
+        "department": {"type": "choice", "instructions": "Select the responsible department.", "criteria": {"billing": "Billing or invoices", "general": "Other questions"}},
+        "urgent": {"type": "noul", "instructions": "Does this require immediate attention?"}
+      }
+    },
+    "mutations": {"builtin": true, "irrelevantFields": [{"path": "$.state", "field": "trace_id", "values": ["trace-123"]}]}
+  }],
+  "contracts": [{"id": "department-stable", "question": "department", "relation": "invariant", "projection": "choice", "mutations": ["question_id_rename", "question_order", "choice_criteria_order", "object_key_order", "irrelevant_field_injection"], "admissibility": "declared", "assumptions": ["Question order, Choice presentation order and tracing metadata do not change ticket routing."]}],
+  "search": {"strategy": "uniform", "seed": 42, "maxDepth": 2, "maxCandidates": 50},
+  "oracle": {"profile": "paired-v1", "pairs": 8},
+  "budget": {"logicalRequests": 300, "httpAttempts": 1500, "wallTimeSeconds": 600, "discoveryRequests": 120, "confirmationRequests": 96, "shrinkRequests": 60, "finalConfirmationRequests": 24},
+  "storage": {"mode": "full", "directory": "../../.jevfuzz"},
+  "reducers": {"independentQuestions": false, "optionalStatePaths": ["$.state.locale", "$.state.channel"], "unorderedArrayPaths": [], "prosePaths": []}
+}
