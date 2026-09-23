@@ -8,14 +8,25 @@ import { exitCode, options, plan, run, RunInterruptedError } from '../runner.ts'
 import { importTrace, loadFailure, renderText, replay, saveArtifacts } from '../artifacts.ts';
 import type { DecisionProvider, FuzzConfig, FuzzReport, RunOptions } from '../types.ts';
 import { assert, FuzzError } from '../util.ts';
+import { readJson } from '../storage.ts';
+import { mainV2 } from './v2.ts';
+import { TOOL_VERSION } from '../version.ts';
 
-const HELP = `JevFuzz 0.1.0 — judgment stability, not factual correctness
+const HELP = `JevFuzz ${TOOL_VERSION} — judgment stability, not factual correctness
 Usage:
   jevfuzz doctor
   jevfuzz plan <case.json> [...cases.json]
   jevfuzz run <case.json> [...cases.json]
   jevfuzz replay <failure.json>
   jevfuzz import <trace.jsonl> --out <directory>
+  jevfuzz plan|fuzz <campaign-v2.json>
+  jevfuzz replay|shrink <finding-v2.json> --out <result.json>
+  jevfuzz corpus add <finding.json> --corpus <directory>
+  jevfuzz check <corpus-directory>
+  jevfuzz compare <experiment.json> --out <report.json>
+  jevfuzz resume <checkpoint.json>
+  jevfuzz inspect <artifact-or-corpus>
+  jevfuzz report <artifact.json> --format html --out <report.html>
 Options:
   --seed <integer>          deterministic mutation seed
   --baseline-runs <n>       sequential baseline runs (default 3, minimum 2)
@@ -37,6 +48,17 @@ export interface CliIO {
 }
 export async function main(argv: string[], supplied: Partial<CliIO> = {}): Promise<number> {
   const io: CliIO = { stdout: s => { process.stdout.write(s); }, stderr: s => { process.stderr.write(s); }, env: process.env, ...supplied };
+  // New v2-only verbs are unambiguous. `plan` and `replay` retain their v1
+  // behavior unless their bounded input declares the v2 document kind.
+  const directV2 = new Set(['fuzz', 'shrink', 'check', 'compare', 'resume', 'recover-lock', 'inspect', 'corpus', 'report']);
+  if (argv[0] === 'v2') return mainV2(argv.slice(1), io);
+  if (directV2.has(argv[0] ?? '')) return mainV2(argv, io);
+  if ((argv[0] === 'plan' || argv[0] === 'replay') && argv[1] && !argv[1].startsWith('-')) {
+    try {
+      const document = await readJson(argv[1], 1_000_000);
+      if (document !== null && typeof document === 'object' && !Array.isArray(document) && (document as Record<string, unknown>).version === 2) return mainV2(argv, io);
+    } catch { /* v1 retains its existing loader and error messages. */ }
+  }
   const secrets = [...new Set([io.env.TYPESAFE_API_KEY, io.env.CLOUDFLARE_API_TOKEN].flatMap(s => s ? [s, s.trim()] : []).filter(Boolean))];
   const clean = (text: string) => secrets.reduce((s, secret) => s.split(secret).join('[REDACTED]'), text);
   const stdout = (s: string) => io.stdout(clean(s));

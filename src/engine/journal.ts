@@ -33,24 +33,26 @@ export class ExecutionJournal {
   readonly #handle: FileHandle;
   readonly #maxBytes: number;
   readonly #secrets: readonly string[];
+  readonly #consumeBytes?: (bytes: number) => void;
   #bytes: number;
   #headHash: string;
   #next: number;
   #queue: Promise<unknown> = Promise.resolve();
   #closed = false;
   readonly records: JournalRecord[];
-  private constructor(handle: FileHandle, state: JournalReader, options: { maxBytes: number; secrets: readonly string[] }) {
+  private constructor(handle: FileHandle, state: JournalReader, options: { maxBytes: number; secrets: readonly string[]; consumeBytes?: (bytes: number) => void }) {
     this.#handle = handle; this.#bytes = state.validBytes; this.#headHash = state.headHash;
     this.#next = state.records.length; this.records = state.records;
     this.#maxBytes = options.maxBytes; this.#secrets = options.secrets;
+    this.#consumeBytes = options.consumeBytes;
   }
-  static async create(path: string, options: { maxBytes?: number; secrets?: readonly string[] } = {}): Promise<ExecutionJournal> {
+  static async create(path: string, options: { maxBytes?: number; secrets?: readonly string[]; consumeBytes?: (bytes: number) => void } = {}): Promise<ExecutionJournal> {
     const safe = await assertSafePath(path); await privateDir(dirname(safe));
     const handle = await open(safe, constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
     await handle.sync(); await syncDirectory(dirname(safe));
-    return new ExecutionJournal(handle, { records: [], truncatedBytes: 0, validBytes: 0, headHash: INITIAL_HASH }, { maxBytes: options.maxBytes ?? 64 * 1024 * 1024, secrets: options.secrets ?? [] });
+    return new ExecutionJournal(handle, { records: [], truncatedBytes: 0, validBytes: 0, headHash: INITIAL_HASH }, { maxBytes: options.maxBytes ?? 64 * 1024 * 1024, secrets: options.secrets ?? [], consumeBytes: options.consumeBytes });
   }
-  static async resume(path: string, options: { maxBytes?: number; secrets?: readonly string[] } = {}): Promise<ExecutionJournal> {
+  static async resume(path: string, options: { maxBytes?: number; secrets?: readonly string[]; consumeBytes?: (bytes: number) => void } = {}): Promise<ExecutionJournal> {
     const maxBytes = options.maxBytes ?? 64 * 1024 * 1024;
     const safe = await assertSafePath(path), text = await readBoundedText(safe, maxBytes);
     const state = decodeJournal(text);
@@ -63,10 +65,21 @@ export class ExecutionJournal {
         await writePrivate(`${safe}.truncated-${Date.now()}`, text.slice(text.lastIndexOf('\n') + 1), options.secrets, maxBytes);
         await handle.truncate(state.validBytes); await handle.sync();
       }
-      return new ExecutionJournal(handle, state, { maxBytes, secrets: options.secrets ?? [] });
+      return new ExecutionJournal(handle, state, { maxBytes, secrets: options.secrets ?? [], consumeBytes: options.consumeBytes });
     } catch (error) { await handle.close(); throw error; }
   }
   get headHash(): string { return this.#headHash; }
+  /** Exact next-frame size after prior writers settle, for final publication preflight. */
+  async nextAppendBytes(type: string, data: unknown): Promise<number> {
+    await this.#queue;
+    assert(!this.#closed && /^[a-z][a-z0-9_-]{0,63}$/.test(type), 'journal closed or invalid event');
+    const frozen = parseBoundedJson(JSON.stringify(data));
+    const body = JSON.stringify({ sequence: this.#next, previousHash: this.#headHash, type, data: frozen });
+    assertNoSecrets(body, this.#secrets);
+    const bytes = Buffer.byteLength(JSON.stringify({ sequence: this.#next, previousHash: this.#headHash, type, data: frozen, bytes: Buffer.byteLength(body), hash: digest(body) })) + 1;
+    if (this.#bytes + bytes > this.#maxBytes) throw new FuzzError('STORAGE_LIMIT', 'journal byte limit reached');
+    return bytes;
+  }
   append(type: string, data: unknown): Promise<void> {
     // Serializing here freezes caller-owned data before yielding to another writer.
     const frozen = parseBoundedJson(JSON.stringify(data));
@@ -77,6 +90,7 @@ export class ExecutionJournal {
       const row: JournalRecord = { sequence: this.#next, previousHash: this.#headHash, type, data: frozen, bytes: Buffer.byteLength(body), hash: digest(body) };
       const text = `${JSON.stringify(row)}\n`;
       if (this.#bytes + Buffer.byteLength(text) > this.#maxBytes) throw new FuzzError('STORAGE_LIMIT', 'journal byte limit reached');
+      this.#consumeBytes?.(Buffer.byteLength(text));
       await this.#handle.writeFile(text); await this.#handle.sync();
       this.#bytes += Buffer.byteLength(text); this.#headHash = row.hash; this.#next++; this.records.push(row);
     });

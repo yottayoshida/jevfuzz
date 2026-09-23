@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "name": "v0.1-position-sensitive",
+  "model": "jev-latest",
+  "baseline": { "runs": 2 },
+  "cases": [{
+    "id": "position-sensitive",
+    "request": {
+      "state": { "subject": "compatibility fixture", "priority": "normal" },
+      "questions": {
+        "route": { "type": "noul", "instructions": "Route this request." },
+        "audit": { "type": "noul", "instructions": "Record an audit decision." }
+      }
+    }
+  }]
+}

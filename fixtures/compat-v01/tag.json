@@ -1,0 +1,7 @@
+{
+  "tag": "v0.1.0",
+  "commit": "c027851a25f8000a6368e9f11cae5209d3ddd2b9",
+  "config": "position-sensitive.jevfuzz.json",
+  "provider": "FakeProvider position-sensitive-v1",
+  "seed": 7
+}

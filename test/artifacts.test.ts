@@ -8,6 +8,7 @@ import { importTrace, loadFailure, renderText, replay, saveArtifacts } from '../
 import { loadConfig } from '../src/config.ts';
 import { FakeProvider } from '../src/provider.ts';
 import { run } from '../src/runner.ts';
+import { TOOL_VERSION } from '../src/version.ts';
 import type { FailureArtifact, FuzzConfig, JevRequest } from '../src/types.ts';
 
 const request: JevRequest = { state: { trace: 'private' }, model: 'jev-test', questions: { decision: { type: 'choice', instructions: 'private instructions', criteria: { yes: 'yes', no: 'no' } } } };
@@ -22,7 +23,7 @@ test('saveArtifacts creates private complete reports and human text', async () =
     const saved = await saveArtifacts(report, root);
     assert.equal((await lstat(saved)).mode & 0o777, 0o700);
     assert.equal((await lstat(join(saved, 'report.json'))).mode & 0o777, 0o600);
-    assert.match(await readFile(join(saved, 'report.txt'), 'utf8'), /JevFuzz 0\.1\.0/);
+    assert.ok((await readFile(join(saved, 'report.txt'), 'utf8')).includes(`JevFuzz ${TOOL_VERSION}`));
     assert.match(renderText(report), /baseline stable/);
     const display = structuredClone(report);
     display.run.modelChanged = true; display.run.requestedModels = ['jev-requested']; display.run.observedModels = ['jev-a', 'jev-b'];
@@ -86,6 +87,24 @@ test('trace import rejects missing timestamp or response before writing', async 
       await assert.rejects(importTrace(trace, join(root, 'imports')), /trace line/);
       await assert.rejects(lstat(join(root, 'imports')));
     }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('legacy readers reject oversized and deeply nested untrusted JSON before writing imports', async () => {
+  const root = await directory();
+  try {
+    const oversizedTrace = join(root, 'oversized.jsonl');
+    await writeFile(oversizedTrace, 'x'.repeat(8 * 1024 * 1024 + 1));
+    await assert.rejects(importTrace(oversizedTrace, join(root, 'imports')), /cannot read trace/i);
+    await assert.rejects(lstat(join(root, 'imports')));
+    const deep: { child?: unknown } = {}; let cursor = deep;
+    for (let index = 0; index < 65; index++) { cursor.child = {}; cursor = cursor.child as { child?: unknown }; }
+    const deepTrace = join(root, 'deep.jsonl');
+    await writeFile(deepTrace, JSON.stringify({ version: 1, source: 'jev-intent-review', timestamp: '2026-09-22T00:00:00.000Z', request, response: deep }));
+    await assert.rejects(importTrace(deepTrace, join(root, 'imports')), /trace.*line/i);
+    const oversizedFailure = join(root, 'oversized-failure.json');
+    await writeFile(oversizedFailure, ' '.repeat(8 * 1024 * 1024 + 1));
+    await assert.rejects(loadFailure(oversizedFailure), /cannot read valid failure/i);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

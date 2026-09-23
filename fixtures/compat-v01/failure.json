@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "runId": "8162eeaa-45dc-4536-b942-367c30020d99",
+  "caseId": "position-sensitive",
+  "questionId": "route",
+  "mutation": {
+    "type": "question_id_rename",
+    "strategy": "seeded",
+    "seed": 7
+  },
+  "idMap": {
+    "q_7_0_2ff152c": "route",
+    "q_7_1_fdc7f12": "audit"
+  },
+  "baselineRequest": {
+    "state": {
+      "subject": "compatibility fixture",
+      "priority": "normal"
+    },
+    "questions": {
+      "route": {
+        "type": "noul",
+        "instructions": "Route this request."
+      },
+      "audit": {
+        "type": "noul",
+        "instructions": "Record an audit decision."
+      }
+    },
+    "model": "jev-latest"
+  },
+  "mutatedRequest": {
+    "state": {
+      "subject": "compatibility fixture",
+      "priority": "normal"
+    },
+    "questions": {
+      "q_7_0_2ff152c": {
+        "type": "noul",
+        "instructions": "Route this request."
+      },
+      "q_7_1_fdc7f12": {
+        "type": "noul",
+        "instructions": "Record an audit decision."
+      }
+    },
+    "model": "jev-latest"
+  },
+  "baselineResponses": [
+    {
+      "model": "v01-position-sensitive",
+      "answers": {
+        "route": {
+          "type": "noul",
+          "noul": 0.1
+        },
+        "audit": {
+          "type": "noul",
+          "noul": 0.1
+        }
+      },
+      "usage": {
+        "input_tokens": 1,
+        "output_tokens": 1
+      }
+    },
+    {
+      "model": "v01-position-sensitive",
+      "answers": {
+        "route": {
+          "type": "noul",
+          "noul": 0.1
+        },
+        "audit": {
+          "type": "noul",
+          "noul": 0.1
+        }
+      },
+      "usage": {
+        "input_tokens": 1,
+        "output_tokens": 1
+      }
+    }
+  ],
+  "mutatedResponses": [
+    {
+      "model": "v01-position-sensitive",
+      "answers": {
+        "q_7_0_2ff152c": {
+          "type": "noul",
+          "noul": 0.9
+        },
+        "q_7_1_fdc7f12": {
+          "type": "noul",
+          "noul": 0.9
+        }
+      },
+      "usage": {
+        "input_tokens": 1,
+        "output_tokens": 1
+      }
+    },
+    {
+      "model": "v01-position-sensitive",
+      "answers": {
+        "q_7_0_2ff152c": {
+          "type": "noul",
+          "noul": 0.9
+        },
+        "q_7_1_fdc7f12": {
+          "type": "noul",
+          "noul": 0.9
+        }
+      },
+      "usage": {
+        "input_tokens": 1,
+        "output_tokens": 1
+      }
+    },
+    {
+      "model": "v01-position-sensitive",
+      "answers": {
+        "q_7_0_2ff152c": {
+          "type": "noul",
+          "noul": 0.9
+        },
+        "q_7_1_fdc7f12": {
+          "type": "noul",
+          "noul": 0.9
+        }
+      },
+      "usage": {
+        "input_tokens": 1,
+        "output_tokens": 1
+      }
+    }
+  ],
+  "comparison": {
+    "baseline": {
+      "type": "noul",
+      "runs": 2,
+      "stable": true,
+      "mean": 0.1,
+      "min": 0.1,
+      "max": 0.1,
+      "range": 0
+    },
+    "mutated": {
+      "type": "noul",
+      "runs": 3,
+      "stable": true,
+      "mean": 0.9,
+      "min": 0.9,
+      "max": 0.9,
+      "range": 0
+    },
+    "thresholds": {
+      "noulBaselineRange": 0.1,
+      "scoreBaselineRange": 0.35,
+      "noulThreshold": 0.5,
+      "noulMinDelta": 0.15,
+      "scoreDelta": 0.5,
+      "jsDivergence": 0.15,
+      "confidenceDrop": 0.3,
+      "noulProbabilityShift": 0.2
+    },
+    "reproduced": 3,
+    "observations": 3,
+    "verdict": "FAIL",
+    "reason": "FAIL_NOUL_THRESHOLD_FLIP",
+    "warnings": [],
+    "delta": 0.8
+  },
+  "model": "v01-position-sensitive",
+  "seed": 7,
+  "baselineRuns": 2,
+  "confirmRuns": 2,
+  "baselineRequestHash": "094d72a1a2308d8310b06f1bd4df00589cffd8487c5d99435132cb0fb6b71567",
+  "mutatedRequestHash": "de8073e59b696f2e6280c98558d5bdcfb850f74f768919a89ab3f30ccfd89b59"
+}

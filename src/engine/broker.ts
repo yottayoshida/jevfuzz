@@ -9,7 +9,7 @@ import { wireHash } from '../identity.ts';
 import { parseBoundedJson } from '../storage.ts';
 
 export interface ExecutionJournal { append(type: string, data: unknown): Promise<void> }
-export interface BrokerOptions { journal?: ExecutionJournal; signal?: AbortSignal; providerName?: string; secrets?: string[]; strict?: boolean; maxPayloadBytes?: number }
+export interface BrokerOptions { journal?: ExecutionJournal; signal?: AbortSignal; providerName?: string; secrets?: string[]; strict?: boolean; maxPayloadBytes?: number; priorModels?: string[]; priorUsage?: { inputTokens: number; outputTokens: number } }
 
 /** The sole v2 execution boundary: validates payloads, charges attempts, and records model cohorts. */
 export class EvaluationBroker {
@@ -23,7 +23,10 @@ export class EvaluationBroker {
   constructor(provider: DecisionProvider, ledger?: BudgetLedger, options: BrokerOptions = {}) {
     this.#provider = provider; this.#ledger = ledger; this.#options = options;
     const capabilities = provider.capabilities;
-    if (options.strict && !(provider instanceof FakeProvider) && (!capabilities?.httpAccounting || capabilities.attemptHooks !== true)) throw new FuzzError('CONFIG', 'strict broker requires provider attempt hooks for HTTP accounting');
+    const builtInFake = Object.getPrototypeOf(provider) === FakeProvider.prototype && provider.evaluate === FakeProvider.prototype.evaluate;
+    if (options.strict && !builtInFake && (!capabilities?.httpAccounting || capabilities.attemptHooks !== true)) throw new FuzzError('CONFIG', 'strict broker requires provider attempt hooks for HTTP accounting');
+    this.observedModels.push(...new Set(options.priorModels ?? [])); this.#firstModel = this.observedModels[0]; this.modelChanged = this.observedModels.length > 1;
+    if (options.priorUsage) Object.assign(this.usage, options.priorUsage);
   }
   async evaluate(payload: string, phase: Phase, operationId: string = randomUUID()): Promise<Observation> {
     if (this.#options.signal?.aborted) throw this.#options.signal.reason ?? new FuzzError('PROVIDER_ABORTED', 'provider request was aborted');
@@ -44,14 +47,17 @@ export class EvaluationBroker {
       this.#ledger.dispatch(logicalId); await this.event('dispatched', { operationId, attemptId: logicalId, phase, kind: 'logical' });
     }
     let transportWireHash: string | undefined, transportUncertain = false, cache: Observation['cache'] = 'unknown', logicalSettled = false;
+    const unsettledAttempts = new Set<string>();
     try {
       const response = validateResponse(await this.#provider.evaluate(request, {
         signal, payload,
         beforeAttempt: async attempt => {
           transportWireHash = wireHash(attempt.transportPayload); this.assertNoSecrets(attempt.transportPayload);
           if (this.#ledger) { this.#ledger.reserve(phase, 'http', attempt.attemptId); try { await this.event('reservation', { operationId, attemptId: attempt.attemptId, phase, kind: 'http', wireHash: transportWireHash }); } catch (error) { this.#ledger.release(attempt.attemptId); throw error; } this.#ledger.dispatch(attempt.attemptId); await this.event('dispatched', { operationId, attemptId: attempt.attemptId, phase, kind: 'http' }); }
+          unsettledAttempts.add(attempt.attemptId);
         },
         settledAttempt: async attempt => {
+          unsettledAttempts.delete(attempt.attemptId);
           if (attempt.outcome === 'unknown') transportUncertain = true;
           if (this.#ledger) { this.#ledger.settle(attempt.attemptId, attempt.outcome); await this.event('settled', { operationId, attemptId: attempt.attemptId, phase, kind: 'http', outcome: attempt.outcome }); }
         },
@@ -67,13 +73,15 @@ export class EvaluationBroker {
       return observation;
     } catch (error) {
       if (this.#ledger && !logicalSettled) {
-        const outcome = error instanceof FuzzError && ['PROVIDER_HTTP', 'PROVIDER_RESPONSE'].includes(error.code) ? 'known' : 'unknown';
+        const knownFailure = error instanceof FuzzError && (['PROVIDER_HTTP', 'PROVIDER_RESPONSE'].includes(error.code)
+          || (['BUDGET', 'DEADLINE'].includes(error.code) && !transportUncertain && unsettledAttempts.size === 0));
+        const outcome = knownFailure ? 'known' : 'unknown';
         this.#ledger.settle(logicalId, outcome);
         await this.event('settled', { operationId, attemptId: logicalId, phase, kind: 'logical', outcome });
       }
       throw error;
     }
   }
-  async event(type: string, data: unknown): Promise<void> { await this.#options.journal?.append(type, data); }
+  async event(type: string, data: unknown): Promise<void> { await this.#options.journal?.append(type, { ...(data as Record<string, unknown>), elapsedMs: this.#ledger?.elapsedMs ?? 0 }); }
   private assertNoSecrets(value: string): void { for (const secret of this.#options.secrets ?? []) if (secret && value.includes(secret)) throw new FuzzError('CONFIG', 'secret-bearing broker data is forbidden'); }
 }

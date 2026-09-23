@@ -126,6 +126,7 @@ export interface Candidate {
   targetHash: string;
   recipe: MutationStep[];
   contractIds: string[];
+  contracts: Contract[];
   /** Mutant question ID -> original question ID, a full bijection. */
   questionMap: Record<string, string>;
   /** Original question ID -> (mutant Choice label -> original label). */

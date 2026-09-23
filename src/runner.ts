@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { TOOL_VERSION } from './version.ts';
 import type { CaseReport, Comparison, DecisionProvider, FuzzConfig, FuzzReport, JevRequest, JevResponse, Mutation, MutationResult, RunOptions } from './types.ts';
 import { generateMutations } from './mutate.ts';
 import { compare, summarize } from './compare.ts';
@@ -57,7 +58,7 @@ export async function run(config: FuzzConfig, provider: DecisionProvider, input:
   const { signal: ignored, ...savedOptions } = opts;
   const report: FuzzReport = { version: 1,
     run: {
-      id: randomUUID(), timestamp: new Date().toISOString(), seed: opts.seed, jevfuzzVersion: '0.1.0', nodeVersion: process.version,
+      id: randomUUID(), timestamp: new Date().toISOString(), seed: opts.seed, jevfuzzVersion: TOOL_VERSION, nodeVersion: process.version,
       mode: provider.mode ?? 'custom', providerMode: provider.mode ?? 'custom', requestedModels: [...new Set(config.cases.map(c => c.request.model))],
       observedModels: [], modelChanged: false, configHash: hash(config), options: savedOptions, status: 'complete',
     },

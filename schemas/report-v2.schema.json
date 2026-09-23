@@ -1,0 +1,893 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://jevfuzz.dev/schema/report-v2.schema.json",
+    "oneOf": [
+        {
+            "$ref": "finding-v2.schema.json"
+        },
+        {
+            "$ref": "corpus-v2.schema.json"
+        },
+        {
+            "$ref": "#/$defs/campaign"
+        },
+        {
+            "$ref": "#/$defs/check"
+        },
+        {
+            "$ref": "#/$defs/replay"
+        },
+        {
+            "$ref": "#/$defs/shrink"
+        },
+        {
+            "$ref": "#/$defs/experimentReport"
+        }
+    ],
+    "$defs": {
+        "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+        },
+        "hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+        },
+        "integer": {
+            "type": "integer",
+            "minimum": 0
+        },
+        "hashes": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/hash"
+            },
+            "maxItems": 100000
+        },
+        "models": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/text"
+            },
+            "maxItems": 100000
+        },
+        "versions": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "schema",
+                "scheduler",
+                "prng",
+                "operators",
+                "serialization",
+                "feedback"
+            ],
+            "properties": {
+                "schema": {
+                    "const": "2"
+                },
+                "scheduler": {
+                    "const": "batch-v1"
+                },
+                "prng": {
+                    "const": "mulberry32-v1"
+                },
+                "operators": {
+                    "const": "witness-v1"
+                },
+                "serialization": {
+                    "const": "json-wire-v1"
+                },
+                "feedback": {
+                    "const": "typed-v1"
+                }
+            }
+        },
+        "summary": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "cases",
+                "questions",
+                "contracts",
+                "candidates",
+                "evaluated",
+                "pending",
+                "invalid",
+                "noops",
+                "limited",
+                "duplicateSeeds",
+                "fail",
+                "inconclusive",
+                "requiredUnevaluated"
+            ],
+            "properties": {
+                "cases": {
+                    "$ref": "#/$defs/integer"
+                },
+                "questions": {
+                    "$ref": "#/$defs/integer"
+                },
+                "contracts": {
+                    "$ref": "#/$defs/integer"
+                },
+                "candidates": {
+                    "$ref": "#/$defs/integer"
+                },
+                "evaluated": {
+                    "$ref": "#/$defs/integer"
+                },
+                "pending": {
+                    "$ref": "#/$defs/integer"
+                },
+                "invalid": {
+                    "$ref": "#/$defs/integer"
+                },
+                "noops": {
+                    "$ref": "#/$defs/integer"
+                },
+                "limited": {
+                    "$ref": "#/$defs/integer"
+                },
+                "duplicateSeeds": {
+                    "$ref": "#/$defs/integer"
+                },
+                "fail": {
+                    "$ref": "#/$defs/integer"
+                },
+                "inconclusive": {
+                    "$ref": "#/$defs/integer"
+                },
+                "requiredUnevaluated": {
+                    "$ref": "#/$defs/integer"
+                }
+            }
+        },
+        "coverage": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "name",
+                "version",
+                "observed",
+                "stable"
+            ],
+            "properties": {
+                "name": {
+                    "const": "typed decisions"
+                },
+                "version": {
+                    "const": "typed-v1"
+                },
+                "observed": {
+                    "$ref": "#/$defs/integer"
+                },
+                "stable": {
+                    "$ref": "#/$defs/integer"
+                }
+            }
+        },
+        "usage": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "inputTokens",
+                "outputTokens"
+            ],
+            "properties": {
+                "inputTokens": {
+                    "$ref": "#/$defs/integer"
+                },
+                "outputTokens": {
+                    "$ref": "#/$defs/integer"
+                }
+            }
+        },
+        "redactedResult": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "candidateId",
+                "depth",
+                "observations",
+                "relations"
+            ],
+            "properties": {
+                "candidateId": {
+                    "$ref": "#/$defs/text"
+                },
+                "depth": {
+                    "$ref": "#/$defs/integer"
+                },
+                "observations": {
+                    "$ref": "#/$defs/integer"
+                },
+                "relations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "contractHash",
+                            "status",
+                            "pending"
+                        ],
+                        "properties": {
+                            "contractHash": {
+                                "$ref": "#/$defs/hash"
+                            },
+                            "status": {
+                                "enum": [
+                                    "holds",
+                                    "violates",
+                                    "unknown",
+                                    "PASS",
+                                    "FAIL",
+                                    "INCONCLUSIVE",
+                                    "NO_CONFIRMED_VIOLATION"
+                                ]
+                            },
+                            "reason": {
+                                "$ref": "#/$defs/text"
+                            },
+                            "pending": {
+                                "type": "boolean"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "redactedFinding": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "id",
+                "fingerprint",
+                "evidenceLevel",
+                "profile",
+                "observations",
+                "replayable"
+            ],
+            "properties": {
+                "id": {
+                    "$ref": "#/$defs/text"
+                },
+                "fingerprint": {
+                    "$ref": "#/$defs/hash"
+                },
+                "evidenceLevel": {
+                    "enum": [
+                        "empirical",
+                        "statistical"
+                    ]
+                },
+                "profile": {
+                    "enum": [
+                        "paired-v1",
+                        "fixed-stat-v1"
+                    ]
+                },
+                "observations": {
+                    "$ref": "#/$defs/integer"
+                },
+                "replayable": {
+                    "const": false
+                }
+            }
+        },
+        "campaign": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "version",
+                "kind",
+                "id",
+                "timestamp",
+                "toolVersion",
+                "configHash",
+                "componentVersions",
+                "provider",
+                "mode",
+                "requestedModels",
+                "observedModels",
+                "seed",
+                "inputHashes",
+                "contractHashes",
+                "targetHashes",
+                "cohort",
+                "estimatedCost",
+                "status",
+                "stopReason",
+                "exitCode",
+                "budget",
+                "slots",
+                "summary",
+                "results",
+                "findings",
+                "coverageProxy",
+                "usage",
+                "persistenceMode",
+                "replayable",
+                "warnings"
+            ],
+            "properties": {
+                "version": {
+                    "const": 2
+                },
+                "kind": {
+                    "const": "campaign"
+                },
+                "id": {
+                    "$ref": "#/$defs/text"
+                },
+                "timestamp": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "toolVersion": {
+                    "$ref": "#/$defs/text"
+                },
+                "configHash": {
+                    "$ref": "#/$defs/hash"
+                },
+                "componentVersions": {
+                    "$ref": "#/$defs/versions"
+                },
+                "provider": {
+                    "enum": [
+                        "typesafe",
+                        "cloudflare",
+                        "custom"
+                    ]
+                },
+                "mode": {
+                    "enum": [
+                        "live",
+                        "fake",
+                        "custom"
+                    ]
+                },
+                "requestedModels": {
+                    "$ref": "#/$defs/models"
+                },
+                "observedModels": {
+                    "$ref": "#/$defs/models"
+                },
+                "seed": {
+                    "type": "integer"
+                },
+                "inputHashes": {
+                    "$ref": "#/$defs/hashes"
+                },
+                "contractHashes": {
+                    "$ref": "#/$defs/hashes"
+                },
+                "targetHashes": {
+                    "$ref": "#/$defs/hashes"
+                },
+                "cohort": {
+                    "enum": [
+                        "unobserved",
+                        "single-model",
+                        "mixed-model"
+                    ]
+                },
+                "estimatedCost": {
+                    "type": "null"
+                },
+                "status": {
+                    "enum": [
+                        "complete",
+                        "incomplete"
+                    ]
+                },
+                "stopReason": {
+                    "$ref": "#/$defs/text"
+                },
+                "exitCode": {
+                    "enum": [
+                        0,
+                        1,
+                        2,
+                        3
+                    ]
+                },
+                "budget": {
+                    "$ref": "artifacts-v2.schema.json#/$defs/ledger"
+                },
+                "slots": {
+                    "$ref": "artifacts-v2.schema.json#/$defs/slots"
+                },
+                "summary": {
+                    "$ref": "#/$defs/summary"
+                },
+                "results": {
+                    "type": "array",
+                    "maxItems": 100000,
+                    "items": {
+                        "oneOf": [
+                            {
+                                "$ref": "artifacts-v2.schema.json#/$defs/result"
+                            },
+                            {
+                                "$ref": "#/$defs/redactedResult"
+                            }
+                        ]
+                    }
+                },
+                "findings": {
+                    "type": "array",
+                    "maxItems": 100000,
+                    "items": {
+                        "oneOf": [
+                            {
+                                "$ref": "finding-v2.schema.json"
+                            },
+                            {
+                                "$ref": "#/$defs/redactedFinding"
+                            }
+                        ]
+                    }
+                },
+                "coverageProxy": {
+                    "$ref": "#/$defs/coverage"
+                },
+                "usage": {
+                    "$ref": "#/$defs/usage"
+                },
+                "persistenceMode": {
+                    "enum": [
+                        "full",
+                        "redacted",
+                        "hash-only",
+                        "memory"
+                    ]
+                },
+                "replayable": {
+                    "type": "boolean"
+                },
+                "warnings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/text"
+                    },
+                    "maxItems": 100000
+                },
+                "errorCode": {
+                    "$ref": "#/$defs/text"
+                },
+                "directory": {
+                    "$ref": "#/$defs/text"
+                },
+                "redactedCandidates": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "common-v2.schema.json#/$defs/json"
+                    },
+                    "maxItems": 100000
+                }
+            }
+        },
+        "check": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "version",
+                "kind",
+                "status",
+                "exitCode",
+                "total",
+                "required",
+                "excluded",
+                "quarantined",
+                "expired",
+                "results",
+                "budget",
+                "provider",
+                "targetHashes",
+                "requestedModels",
+                "observedModels",
+                "cohort"
+            ],
+            "properties": {
+                "version": {
+                    "const": 2
+                },
+                "kind": {
+                    "const": "check"
+                },
+                "status": {
+                    "enum": [
+                        "complete",
+                        "incomplete"
+                    ]
+                },
+                "exitCode": {
+                    "enum": [
+                        0,
+                        1,
+                        2,
+                        3
+                    ]
+                },
+                "total": {
+                    "$ref": "#/$defs/integer"
+                },
+                "required": {
+                    "$ref": "#/$defs/integer"
+                },
+                "excluded": {
+                    "$ref": "#/$defs/integer"
+                },
+                "quarantined": {
+                    "$ref": "#/$defs/integer"
+                },
+                "expired": {
+                    "$ref": "#/$defs/integer"
+                },
+                "results": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "entryId",
+                            "verdict",
+                            "reason"
+                        ],
+                        "properties": {
+                            "entryId": {
+                                "$ref": "#/$defs/hash"
+                            },
+                            "verdict": {
+                                "enum": [
+                                    "PASS",
+                                    "FAIL",
+                                    "INCONCLUSIVE",
+                                    "NO_CONFIRMED_VIOLATION"
+                                ]
+                            },
+                            "reason": {
+                                "$ref": "#/$defs/text"
+                            },
+                            "confirmation": {
+                                "$ref": "artifacts-v2.schema.json#/$defs/confirmation"
+                            }
+                        }
+                    }
+                },
+                "budget": {
+                    "$ref": "artifacts-v2.schema.json#/$defs/ledger"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "targetHashes": {
+                    "$ref": "#/$defs/hashes"
+                },
+                "requestedModels": {
+                    "$ref": "#/$defs/models"
+                },
+                "observedModels": {
+                    "$ref": "#/$defs/models"
+                },
+                "cohort": {
+                    "enum": [
+                        "unobserved",
+                        "single",
+                        "mixed"
+                    ]
+                }
+            }
+        },
+        "replay": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "version",
+                "kind",
+                "status",
+                "findingId",
+                "confirmation",
+                "observations",
+                "provider",
+                "targetHashes",
+                "requestedModels",
+                "observedModels",
+                "cohort",
+                "budget"
+            ],
+            "properties": {
+                "version": {
+                    "const": 2
+                },
+                "kind": {
+                    "const": "replay"
+                },
+                "status": {
+                    "enum": [
+                        "complete",
+                        "incomplete"
+                    ]
+                },
+                "findingId": {
+                    "$ref": "#/$defs/text"
+                },
+                "confirmation": {
+                    "$ref": "artifacts-v2.schema.json#/$defs/confirmation"
+                },
+                "observations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "artifacts-v2.schema.json#/$defs/observation"
+                    },
+                    "maxItems": 100000
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "targetHashes": {
+                    "$ref": "#/$defs/hashes"
+                },
+                "requestedModels": {
+                    "$ref": "#/$defs/models"
+                },
+                "observedModels": {
+                    "$ref": "#/$defs/models"
+                },
+                "cohort": {
+                    "enum": [
+                        "unobserved",
+                        "single",
+                        "mixed"
+                    ]
+                },
+                "budget": {
+                    "$ref": "artifacts-v2.schema.json#/$defs/ledger"
+                }
+            }
+        },
+        "complexity": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/integer"
+            },
+            "maxItems": 1000
+        },
+        "shrink": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "version",
+                "kind",
+                "original",
+                "finding",
+                "status",
+                "attempted",
+                "accepted",
+                "originalComplexity",
+                "finalComplexity",
+                "history"
+            ],
+            "properties": {
+                "version": {
+                    "const": 2
+                },
+                "kind": {
+                    "const": "shrink"
+                },
+                "original": {
+                    "$ref": "finding-v2.schema.json"
+                },
+                "finding": {
+                    "$ref": "finding-v2.schema.json"
+                },
+                "status": {
+                    "enum": [
+                        "reduced",
+                        "locally_minimal",
+                        "budget_limited",
+                        "unconfirmed"
+                    ]
+                },
+                "attempted": {
+                    "$ref": "#/$defs/integer"
+                },
+                "accepted": {
+                    "$ref": "#/$defs/integer"
+                },
+                "originalComplexity": {
+                    "$ref": "#/$defs/complexity"
+                },
+                "finalComplexity": {
+                    "$ref": "#/$defs/complexity"
+                },
+                "history": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "candidateId",
+                            "accepted",
+                            "reason",
+                            "complexity"
+                        ],
+                        "properties": {
+                            "candidateId": {
+                                "$ref": "#/$defs/text"
+                            },
+                            "accepted": {
+                                "type": "boolean"
+                            },
+                            "reason": {
+                                "$ref": "#/$defs/text"
+                            },
+                            "complexity": {
+                                "$ref": "#/$defs/complexity"
+                            }
+                        }
+                    }
+                },
+                "unconfirmedCandidate": {
+                    "$ref": "artifacts-v2.schema.json#/$defs/candidate"
+                }
+            }
+        },
+        "targetResult": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "target",
+                "provider",
+                "targetHash",
+                "status",
+                "observations",
+                "observedModels"
+            ],
+            "properties": {
+                "target": {
+                    "$ref": "#/$defs/text"
+                },
+                "provider": {
+                    "enum": [
+                        "typesafe",
+                        "cloudflare",
+                        "custom"
+                    ]
+                },
+                "targetHash": {
+                    "$ref": "#/$defs/hash"
+                },
+                "status": {
+                    "enum": [
+                        "holds",
+                        "violates",
+                        "unknown"
+                    ]
+                },
+                "discovery": {
+                    "$ref": "artifacts-v2.schema.json#/$defs/relation"
+                },
+                "confirmation": {
+                    "$ref": "artifacts-v2.schema.json#/$defs/confirmation"
+                },
+                "observations": {
+                    "$ref": "#/$defs/integer"
+                },
+                "observedModels": {
+                    "$ref": "#/$defs/models"
+                }
+            }
+        },
+        "experimentReport": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "version",
+                "kind",
+                "name",
+                "cases",
+                "counts",
+                "status",
+                "exitCode",
+                "budget"
+            ],
+            "properties": {
+                "version": {
+                    "const": 2
+                },
+                "kind": {
+                    "const": "experiment-report"
+                },
+                "name": {
+                    "$ref": "#/$defs/text"
+                },
+                "cases": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "id",
+                            "status",
+                            "old",
+                            "new"
+                        ],
+                        "properties": {
+                            "id": {
+                                "$ref": "#/$defs/text"
+                            },
+                            "status": {
+                                "enum": [
+                                    "introduced",
+                                    "resolved",
+                                    "persists",
+                                    "no_detected_regression",
+                                    "inconclusive"
+                                ]
+                            },
+                            "old": {
+                                "$ref": "#/$defs/targetResult"
+                            },
+                            "new": {
+                                "$ref": "#/$defs/targetResult"
+                            }
+                        }
+                    },
+                    "maxItems": 100000
+                },
+                "counts": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "introduced",
+                        "resolved",
+                        "persists",
+                        "no_detected_regression",
+                        "inconclusive"
+                    ],
+                    "properties": {
+                        "introduced": {
+                            "$ref": "#/$defs/integer"
+                        },
+                        "resolved": {
+                            "$ref": "#/$defs/integer"
+                        },
+                        "persists": {
+                            "$ref": "#/$defs/integer"
+                        },
+                        "no_detected_regression": {
+                            "$ref": "#/$defs/integer"
+                        },
+                        "inconclusive": {
+                            "$ref": "#/$defs/integer"
+                        }
+                    }
+                },
+                "status": {
+                    "enum": [
+                        "complete",
+                        "incomplete"
+                    ]
+                },
+                "exitCode": {
+                    "enum": [
+                        0,
+                        1,
+                        2,
+                        3
+                    ]
+                },
+                "budget": {
+                    "$ref": "artifacts-v2.schema.json#/$defs/ledger"
+                },
+                "errorCode": {
+                    "$ref": "#/$defs/text"
+                }
+            }
+        }
+    }
+}

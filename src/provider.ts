@@ -25,6 +25,12 @@ function providerError(code: string, message: string): FuzzError {
   return new FuzzError(code, message);
 }
 
+/** Hooks sit on the durable accounting boundary: retain their machine-readable code,
+ * but never expose an arbitrary hook message through a live provider error. */
+function hookError(error: unknown, fallback: 'STORAGE_LIMIT' | 'PERSISTENCE_ERROR'): FuzzError {
+  return error instanceof FuzzError ? providerError(error.code, 'provider hook failed') : providerError(fallback, 'provider hook failed');
+}
+
 function responseError(): FuzzError {
   return providerError('PROVIDER_RESPONSE', 'invalid provider response');
 }
@@ -247,16 +253,17 @@ abstract class HttpProvider implements DecisionProvider {
       const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
       let dispatched = false;
       const attemptInfo = { attemptId: randomUUID(), transportPayload: payload, attempt };
-      const settle = async (outcome: 'known' | 'unknown') => { if (dispatched) { dispatched = false; try { await options.settledAttempt?.({ ...attemptInfo, outcome }); } catch { throw providerError('STORAGE_LIMIT', 'provider attempt hook failed'); } } };
+      const settle = async (outcome: 'known' | 'unknown') => { if (dispatched) { dispatched = false; try { await options.settledAttempt?.({ ...attemptInfo, outcome }); } catch (error) { throw hookError(error, 'STORAGE_LIMIT'); } } };
       try {
         if (attempt > 1) this.#httpRetries++;
-        try { await options.beforeAttempt?.(attemptInfo); } catch { throw providerError('STORAGE_LIMIT', 'provider attempt hook failed'); }
+        try { await options.beforeAttempt?.(attemptInfo); } catch (error) { throw hookError(error, 'STORAGE_LIMIT'); }
         dispatched = true;
         this.#httpAttempts++;
-        const response = await this.#fetch(this.#url, {
-          method: 'POST', headers: { Authorization: `Bearer ${this.#token}`, 'Content-Type': 'application/json' },
-          body: payload, redirect: 'manual', signal,
-        });
+        const init: RequestInit & { cache: 'no-store' } = {
+          method: 'POST', headers: { Authorization: `Bearer ${this.#token}`, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store' },
+          body: payload, redirect: 'manual', cache: 'no-store', signal,
+        };
+        const response = await this.#fetch(this.#url, init);
         if (response.status >= 300 && response.status < 400) { await settle('known'); throw providerError('PROVIDER_HTTP', 'provider rejected a redirect'); }
         if ((response.status === 429 || response.status === 529) && attempt < this.#maxAttempts) {
           await settle('known');
@@ -274,7 +281,7 @@ abstract class HttpProvider implements DecisionProvider {
         }
         const normalized = validateResponse(this.unpack(raw), request);
         if (JSON.stringify(normalized).includes(this.#token)) throw providerError('PROVIDER_RESPONSE', 'provider response contains a credential');
-        await settle('known'); try { await options.observedMetadata?.({ cache: 'unknown' }); } catch { throw providerError('STORAGE_LIMIT', 'provider observation hook failed'); }
+        await settle('known'); try { await options.observedMetadata?.({ cache: 'unknown' }); } catch (error) { throw hookError(error, 'PERSISTENCE_ERROR'); }
         return normalized;
       } catch (error) {
         if (dispatched) await settle('unknown');
@@ -353,9 +360,9 @@ function defaultResponse(request: JevRequest): JevResponse {
 export class FakeProvider implements DecisionProvider {
   readonly mode = 'fake' as const;
   readonly httpRetries = 0;
-  readonly capabilities: ProviderCapabilities = { adapterId: 'fake', adapterVersion: '1', observedModel: true, probabilities: true, confidence: true, usage: true, httpAccounting: false, byteReplay: true, cancellation: true, cacheMetadata: false };
+  readonly capabilities: ProviderCapabilities = { adapterId: 'fake', adapterVersion: '1', observedModel: true, probabilities: true, confidence: true, usage: true, httpAccounting: false, byteReplay: true, cancellation: true, cacheMetadata: true };
   #index = 0;
   readonly #handler: (request: JevRequest, index: number) => JevResponse;
   constructor(handler: (request: JevRequest, index: number) => JevResponse = defaultResponse) { this.#handler = handler; }
-  async evaluate(request: JevRequest, options: EvaluateOptions = {}): Promise<JevResponse> { options.signal?.throwIfAborted(); return validateResponse(this.#handler(request, this.#index++), request); }
+  async evaluate(request: JevRequest, options: EvaluateOptions = {}): Promise<JevResponse> { options.signal?.throwIfAborted(); const result = validateResponse(this.#handler(request, this.#index++), request); await options.observedMetadata?.({ cache: 'fresh' }); return result; }
 }

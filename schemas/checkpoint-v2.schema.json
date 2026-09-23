@@ -1,0 +1,123 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "kind",
+    "runId",
+    "config",
+    "configHash",
+    "componentVersions",
+    "budget",
+    "slots",
+    "scheduler",
+    "results",
+    "findings",
+    "observedModels",
+    "journalHead",
+    "journalFile",
+    "timestamp"
+  ],
+  "properties": {
+    "version": {
+      "const": 2
+    },
+    "kind": {
+      "const": "checkpoint"
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "config": {
+      "$ref": "artifacts-v2.schema.json#/$defs/compiledCampaign"
+    },
+    "configHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "componentVersions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "scheduler",
+        "prng",
+        "operators",
+        "serialization",
+        "feedback"
+      ],
+      "properties": {
+        "schema": {
+          "const": "2"
+        },
+        "scheduler": {
+          "const": "batch-v1"
+        },
+        "prng": {
+          "const": "mulberry32-v1"
+        },
+        "operators": {
+          "const": "witness-v1"
+        },
+        "serialization": {
+          "const": "json-wire-v1"
+        },
+        "feedback": {
+          "const": "typed-v1"
+        }
+      }
+    },
+    "budget": {
+      "$ref": "artifacts-v2.schema.json#/$defs/ledger"
+    },
+    "slots": {
+      "$ref": "artifacts-v2.schema.json#/$defs/slots"
+    },
+    "scheduler": {
+      "$ref": "artifacts-v2.schema.json#/$defs/scheduler"
+    },
+    "results": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 100000,
+      "items": {
+        "$ref": "artifacts-v2.schema.json#/$defs/result"
+      }
+    },
+    "findings": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 100000,
+      "items": {
+        "$ref": "artifacts-v2.schema.json#/$defs/finding"
+      }
+    },
+    "observedModels": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 100000,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096
+      }
+    },
+    "journalHead": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "journalFile": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jevfuzz.dev/schema/checkpoint-v2.schema.json"
+}

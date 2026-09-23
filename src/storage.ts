@@ -1,5 +1,5 @@
 import { constants } from 'node:fs';
-import { lstat, mkdir, open, readFile, rename, rm } from 'node:fs/promises';
+import { lstat, mkdir, open, readFile, readdir, rename, rm } from 'node:fs/promises';
 import { dirname, join, parse, resolve } from 'node:path';
 import { hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -7,6 +7,35 @@ import { assert, FuzzError } from './util.ts';
 
 export const MAX_JSON_BYTES = 8 * 1024 * 1024;
 export const MAX_JSON_DEPTH = 64;
+
+/** Counts every persisted byte in one run, including the temporary replacement peak. */
+export class StorageQuota {
+  readonly limit: number; #used = 0; readonly #files = new Map<string, number>();
+  constructor(limit: number) { assert(Number.isSafeInteger(limit) && limit > 0, 'invalid storage quota'); this.limit = limit; }
+  get used(): number { return this.#used; }
+  assertAvailable(bytes: number): void {
+    assert(Number.isSafeInteger(bytes) && bytes >= 0, 'invalid storage byte count');
+    if (this.#used + bytes > this.limit) throw new FuzzError('STORAGE_LIMIT', 'total run byte limit exceeded');
+  }
+  /** Registers an already durable file before subsequent appends/replacements. */
+  adopt(path: string, bytes: number): void {
+    assert(Number.isSafeInteger(bytes) && bytes >= 0 && !this.#files.has(path), 'invalid adopted storage file');
+    this.consume(bytes); this.#files.set(path, bytes);
+  }
+  /** Charges an append and retains its size for a later atomic replacement. */
+  append(path: string, bytes: number): void {
+    this.consume(bytes); this.#files.set(path, (this.#files.get(path) ?? 0) + bytes);
+  }
+  consume(bytes: number): void {
+    this.assertAvailable(bytes);
+    this.#used += bytes;
+  }
+  async write(path: string, text: string, options: { secrets?: readonly string[]; replace?: boolean } = {}): Promise<void> {
+    const bytes = Buffer.byteLength(text); this.consume(bytes);
+    if (options.replace) await atomicPrivate(path, text, options.secrets, this.limit); else await writePrivate(path, text, options.secrets, this.limit);
+    this.#used -= this.#files.get(path) ?? 0; this.#files.set(path, bytes);
+  }
+}
 
 export function boundedJson(value: unknown, maxDepth = MAX_JSON_DEPTH, maxNodes = 100_000): void {
   const pending: [unknown, number][] = [[value, 0]];
@@ -118,10 +147,25 @@ export async function writerLock(directory: string): Promise<WriterLock> {
 /** Explicit local recovery: only a dead process on this host can relinquish a lock. */
 export async function recoverWriterLock(directory: string): Promise<void> {
   const root = await privateDir(directory), file = join(root, '.writer.lock');
-  const owner = await readJson(file) as { pid?: number; host?: string };
+  const owner = await readJson(file) as { pid?: number; host?: string; token?: string };
   assert(owner.host === hostname() && Number.isSafeInteger(owner.pid) && owner.pid! > 0, 'cannot recover an unknown lock owner');
   let alive = true;
   try { process.kill(owner.pid!, 0); } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ESRCH') alive = false; else throw error; }
   assert(!alive, 'lock owner is still alive');
+  const journals: string[] = [], pending = [root]; let visited = 0;
+  while (pending.length) {
+    const folder = pending.pop()!;
+    for (const entry of await readdir(folder, { withFileTypes: true })) {
+      assert(++visited <= 100_000 && !entry.isSymbolicLink(), 'unsafe or oversized recovery directory');
+      const child = join(folder, entry.name);
+      if (entry.isDirectory()) pending.push(child);
+      else if (entry.name.endsWith('.jsonl')) journals.push(child);
+    }
+  }
+  assert(journals.length > 0, 'stale-lock recovery requires a durable journal');
+  const { decodeJournal } = await import('./engine/journal.ts');
+  for (const path of journals) decodeJournal(await readBoundedText(path, 256 * 1024 * 1024));
+  const current = await readJson(file) as typeof owner;
+  assert(owner.token && current.token === owner.token && current.pid === owner.pid && current.host === owner.host, 'lock owner changed during recovery');
   await rm(file); await syncDirectory(root);
 }

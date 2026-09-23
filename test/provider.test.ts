@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { CloudflareProvider, FakeProvider, TypeSafeProvider, realSleep, validateResponse } from '../src/provider.ts';
+import { FuzzError } from '../src/util.ts';
 
 test('live rounded probabilities retain raw values within their quantization bound', () => {
   const r: JevRequest = { state: 'public fixture', model: 'jev-latest', questions: { q: { type: 'choice', instructions: 'choose', criteria: { a: 'a', b: 'b', c: 'c', d: 'd', e: 'e' } } } };
@@ -66,6 +67,8 @@ test('TypeSafeProvider retries 429 and 529, serializes the request once, and pre
   assert.equal(calls[1]!.body, calls[2]!.body);
   assert.equal(waits.length, 2);
   assert.equal(calls[0]!.redirect, 'manual');
+  assert.equal((calls[0]! as RequestInit & { cache: string }).cache, 'no-store');
+  assert.equal((calls[0]!.headers as Record<string, string>)['Cache-Control'], 'no-cache, no-store');
   assert.equal((calls[0]!.headers as Record<string, string>).Authorization, 'Bearer private-key');
 });
 
@@ -79,6 +82,15 @@ test('TypeSafeProvider makes no more than five actual attempts when a retryable 
   assert.equal(calls, 5);
   assert.equal(provider.httpAttempts, 5);
   assert.equal(provider.httpRetries, 4);
+});
+
+test('TypeSafeProvider preserves hook FuzzError codes without dispatching', async () => {
+  let calls = 0;
+  const provider = new TypeSafeProvider({ TYPESAFE_API_KEY: 'private-key' }, { fetch: async () => { calls++; return json(response); } });
+  await assert.rejects(provider.evaluate(request, { beforeAttempt: async () => { throw new FuzzError('BUDGET', 'secret internal detail'); } }), (error: unknown) => {
+    assert.ok(error instanceof FuzzError); assert.equal(error.code, 'BUDGET'); assert.equal(error.message.includes('secret internal detail'), false); return true;
+  });
+  assert.equal(calls, 0);
 });
 
 test('TypeSafeProvider honors Retry-After seconds and dates without the legacy 30-second cap', async () => {
