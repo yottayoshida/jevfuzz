@@ -1218,7 +1218,7 @@
       ],
       "properties": {
         "version": {
-          "const": "batch-v1"
+          "const": "batch-v2"
         },
         "batch": {
           "type": "integer",
@@ -1505,7 +1505,10 @@
               "const": "2"
             },
             "scheduler": {
-              "const": "batch-v1"
+              "enum": [
+                "batch-v1",
+                "batch-v2"
+              ]
             },
             "prng": {
               "const": "mulberry32-v1"
@@ -1714,6 +1717,25 @@
         },
         "policy": {
           "$ref": "campaign-v2.schema.json#/$defs/policy"
+        },
+        "sourceQuestionMapping": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "sourceLabelMappings": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          }
         },
         "questionMapping": {
           "type": "object",

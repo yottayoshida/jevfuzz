@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+const env = process.env;
+assert.equal(env.PLAN_CODE, '0');
+assert.equal(JSON.parse(await readFile(env.PLAN_REPORT, 'utf8')).networkCalls, 0);
+assert.equal(env.INVALID_CODE, '2');
+assert.equal(env.INVALID_OUTCOME, 'failure');
+assert.ok(JSON.parse(await readFile(join(env.INVALID_ARTIFACTS, 'error.json'), 'utf8')).error);
+assert.equal(env.EMPTY_CODE, '3');
+assert.equal(env.EMPTY_OUTCOME, 'failure');
+const empty = JSON.parse(await readFile(env.EMPTY_REPORT, 'utf8'));
+assert.equal(empty.exitCode, 3);
+assert.equal(empty.required, 0);
+console.log('Composite action: plan passed; invalid input and empty regression scope failed with retained outputs (9 assertions).');

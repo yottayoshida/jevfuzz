@@ -1,0 +1,48 @@
+name: JevFuzz
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: jevfuzz-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: yottayoshida/jevfuzz@ACTION_COMMIT
+        with:
+          command: plan
+          target: .jevfuzz/campaign.json
+  fuzz:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: yottayoshida/jevfuzz@ACTION_COMMIT
+        id: jevfuzz
+        with:
+          command: fuzz
+          target: .jevfuzz/campaign.json
+          provider: cloudflare
+          storage: hash-only
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Keep the report even when JevFuzz fails
+        if: always() && steps.jevfuzz.outputs.artifacts-path != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: jevfuzz-${{ github.run_id }}
+          path: ${{ steps.jevfuzz.outputs.artifacts-path }}
+          retention-days: 7

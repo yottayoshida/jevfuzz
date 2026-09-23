@@ -16,8 +16,47 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
       - run: npm run build
+      - run: npm test
       - run: node scripts/verify-package.ts
       - run: node dist/cli/main.js plan fixtures/live-smoke.jevfuzz.json --seed 42 --json
       - run: npm pack --dry-run
+  action:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Composite plan from consumer configuration
+        id: plan
+        uses: ./
+        with:
+          command: plan
+          target: examples/github-actions/campaign.json
+      - name: Composite configuration failure retains outputs
+        id: invalid
+        continue-on-error: true
+        uses: ./
+        with:
+          command: fuzz
+          target: missing-campaign.json
+      - run: mkdir empty-action-corpus
+      - name: Composite empty regression scope fails as inconclusive
+        id: empty
+        continue-on-error: true
+        uses: ./
+        with:
+          command: check
+          target: empty-action-corpus
+      - name: Assert composite outcomes and preserved reports
+        env:
+          PLAN_CODE: ${{ steps.plan.outputs.exit-code }}
+          PLAN_REPORT: ${{ steps.plan.outputs.report-path }}
+          INVALID_CODE: ${{ steps.invalid.outputs.exit-code }}
+          INVALID_OUTCOME: ${{ steps.invalid.outcome }}
+          INVALID_ARTIFACTS: ${{ steps.invalid.outputs.artifacts-path }}
+          EMPTY_CODE: ${{ steps.empty.outputs.exit-code }}
+          EMPTY_OUTCOME: ${{ steps.empty.outcome }}
+          EMPTY_REPORT: ${{ steps.empty.outputs.report-path }}
+        run: node scripts/verify-action-ci.mjs

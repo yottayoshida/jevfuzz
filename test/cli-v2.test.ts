@@ -29,8 +29,8 @@ async function campaignFile(): Promise<{ root: string; file: string }> {
   const file = join(root, 'campaign.json'); await writeFile(file, JSON.stringify(value)); return { root, file };
 }
 
-async function findingFile(root: string): Promise<string> {
-  const seed = { id: 'seed', mutations: { builtin: true, unorderedArrays: [], irrelevantFields: [], prosePaths: [] }, request: { state: {}, model: 'fake-jev-1', questions: { route: { type: 'choice' as const, instructions: 'x', criteria: { billing: 'bill', general: 'general' } } } } };
+async function findingFile(root: string, model='fake-jev-1', minimumSupport=1): Promise<string> {
+  const seed = { id: 'seed', mutations: { builtin: true, unorderedArrays: [], irrelevantFields: [], prosePaths: [] }, request: { state: {}, model, questions: { route: { type: 'choice' as const, instructions: 'x', criteria: { billing: 'bill', general: 'general' } } } } };
   const contract: Contract = { id: 'route', question: 'route', relation: 'invariant', projection: 'choice', mutations: ['question_id_rename'], admissibility: 'structural', assumptions: [], required: true };
   const candidate = buildCandidate(seed, [{ operator: 'question_id_rename', version: '1', admissibility: 'structural', renames: { route: 'renamed' }, reads: [], writes: [], requires: [], invalidates: [] }], [contract], undefined, 'custom');
   let index = 0;
@@ -40,9 +40,9 @@ async function findingFile(root: string): Promise<string> {
     index++; return { id: `id-${index}`, operationId: `operation-${index}`, phase, wireHash: payload === candidate.basePayload ? candidate.baseWireHash : candidate.mutantWireHash, response, provider: 'fake', observedModel: 'fake-jev-1', cache: 'fresh' };
   } };
   const a = await executor.evaluate(candidate.basePayload, 'discovery'), b = await executor.evaluate(candidate.mutantPayload, 'discovery');
-  const oracle = { profile: 'paired-v1' as const, pairs: 1, minimumSupport: 1, maxControlViolationRate: 0, minimumEffect: 0, alpha: .05, originalSlots: 0, shrinkSlots: 0 };
+  const oracle = { profile: 'paired-v1' as const, pairs: 1, minimumSupport, maxControlViolationRate: 0, minimumEffect: 0, alpha: .05, originalSlots: 0, shrinkSlots: 0 };
   const confirmation = await confirmCandidate(candidate, contract, executor, oracle, { signature: evaluateRelation(candidate, contract, a.response, b.response).signature!, seed: 1 });
-  const path = join(root, 'finding.json'); await saveFinding(createFinding(candidate, contract, oracle, confirmation, { provider: 'custom', reducers: { independentQuestions: false, optionalStatePaths: [], unorderedArrayPaths: [], prosePaths: [] } }), path); return path;
+  const path = join(root, `finding-${model}.json`); await saveFinding(createFinding(candidate, contract, oracle, confirmation, { provider: 'custom', reducers: { independentQuestions: false, optionalStatePaths: [], unorderedArrayPaths: [], prosePaths: [] } }), path); return path;
 }
 
 test('direct v2 plan selects the v2 campaign parser and makes zero provider calls', async () => {
@@ -92,6 +92,24 @@ test('direct corpus inspect and check use the v2 command path with an injected p
     assert.equal(await main(['check', root, '--json'], { env: {}, provider: new FakeProvider(), stdout: text => { stdout += text; }, stderr: () => {} }), 3);
     assert.equal(JSON.parse(stdout).kind, 'check');
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+test('check --profile creates complete fixed-stat defaults with selected slots', async () => {
+  const root=await mkdtemp(join(tmpdir(),'jevfuzz-cli-profile-'));
+  try {
+    const finding=await loadFinding(await findingFile(root)), corpus=join(root,'corpus'), id=await addToCorpus(finding,corpus);
+    await triageCorpus(corpus,id,'accepted_regression',{actor:'a',reason:'reviewed'});
+    let stdout=''; const code=await main(['check',corpus,'--profile','fixed-stat-v1','--json'],{env:{},provider:new FakeProvider(),stdout:text=>{stdout+=text;},stderr:()=>{}});
+    assert.ok([0,1,3].includes(code)); const report=JSON.parse(stdout); assert.deepEqual(report.oracle,{profile:'fixed-stat-v1',pairs:64,minimumSupport:.75,maxControlViolationRate:.125,minimumEffect:0,alpha:.05,originalSlots:1,shrinkSlots:0}); assert.equal(report.results[0].confirmation.confirmationSamples,192); assert.equal(report.results[0].confirmation.controls,64); assert.equal(report.budget.logical.limit,194);
+  } finally { await rm(root,{recursive:true,force:true}); }
+});
+test('check CLI rejects mixed selected defaults before injected provider calls', async () => {
+  const root=await mkdtemp(join(tmpdir(),'jevfuzz-cli-mixed-oracle-'));
+  try {
+    const first=await loadFinding(await findingFile(root)), second=await loadFinding(await findingFile(root,'other-model',.5)), corpus=join(root,'corpus');
+    const firstId=await addToCorpus(first,corpus), secondId=await addToCorpus(second,corpus); await triageCorpus(corpus,firstId,'accepted_regression',{actor:'a',reason:'reviewed'}); await triageCorpus(corpus,secondId,'accepted_regression',{actor:'a',reason:'reviewed'});
+    let calls=0,error=''; const code=await main(['check',corpus],{env:{},provider:new FakeProvider(()=>{calls++;throw new Error('must not call');}),stdout:()=>{},stderr:text=>{error+=text;}});
+    assert.equal(code,2); assert.match(error,/oracle configurations differ/); assert.equal(calls,0);
+  } finally { await rm(root,{recursive:true,force:true}); }
 });
 
 test('replay and shrink require private output, journal before evaluation, and persist output', async () => {

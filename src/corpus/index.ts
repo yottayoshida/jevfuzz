@@ -12,7 +12,7 @@ import { ExecutionJournal, decodeJournal } from '../engine/journal.ts';
 import { BudgetLedger } from '../engine/budget.ts';
 import { EvaluationBroker } from '../engine/broker.ts';
 import { evaluateRelation } from '../contracts/index.ts';
-import { confirmCandidate, confirmationCost, HypothesisSlots } from '../oracles/index.ts';
+import { confirmCandidate, confirmationCost, HypothesisSlots, validateOracle } from '../oracles/index.ts';
 import { TypeSafeProvider, CloudflareProvider } from '../provider.ts';
 
 export type TriageStatus = 'confirmed' | 'accepted_regression' | 'invalid_contract' | 'duplicate' | 'quarantined' | 'resolved';
@@ -118,17 +118,39 @@ export async function corpusFindings(directory: string): Promise<{ entry: Corpus
     return { entry, finding };
   }));
 }
-export interface CheckReport { version: 2; kind: 'check'; status: 'complete' | 'incomplete'; exitCode: number; provider: string; targetHashes: string[]; requestedModels: string[]; cohort: 'unobserved' | 'single' | 'mixed'; total: number; required: number; excluded: number; quarantined: number; expired: number; results: { entryId: string; verdict: Confirmation['verdict']; reason: string; confirmation?: Confirmation }[]; budget: ReturnType<BudgetLedger['snapshot']>; observedModels: string[] }
-export async function checkCorpus(directory: string, provider: DecisionProvider, options: { oracle?: OracleConfig; budget?: BudgetConfig; signal?: AbortSignal; secrets?: string[]; now?: string; providerName?: string } = {}): Promise<CheckReport> {
-  const root = await privateDir(directory), lock = await writerLock(root);
-  try {
-  const { quota } = await openCorpusStorage(root), all = await corpusFindings(root), now = options.now ? Date.parse(options.now) : Date.now();
+export interface CheckReport { version: 2; kind: 'check'; status: 'complete' | 'incomplete'; exitCode: number; provider: string; oracle: OracleConfig; targetHashes: string[]; requestedModels: string[]; cohort: 'unobserved' | 'single' | 'mixed'; total: number; required: number; excluded: number; quarantined: number; expired: number; results: { entryId: string; verdict: Confirmation['verdict']; reason: string; confirmation?: Confirmation }[]; budget: ReturnType<BudgetLedger['snapshot']>; observedModels: string[] }
+type CorpusFinding = Awaited<ReturnType<typeof corpusFindings>>[number];
+const oracleFields = ['profile', 'pairs', 'minimumSupport', 'maxControlViolationRate', 'minimumEffect', 'alpha', 'originalSlots', 'shrinkSlots'] as const;
+function sameOracle(a: OracleConfig, b: OracleConfig): boolean { return oracleFields.every(key => a[key] === b[key]); }
+export function prepareCorpusCheck(all: CorpusFinding[], options: { oracle?: OracleConfig; profile?: OracleConfig['profile']; now?: number; providerName?: string } = {}): { selected: CorpusFinding[]; oracle: OracleConfig; provider: string; preparationHash: string } {
+  assert(!(options.oracle && options.profile), 'supply either options.oracle or --profile, not both');
+  const now = options.now ?? Date.now();
   assert(Number.isFinite(now), 'invalid evaluation time');
   const selected = all.filter(({ entry }) => ['accepted_regression', 'resolved'].includes(entry.triage.status) || (entry.triage.status === 'quarantined' && Date.parse(entry.triage.expiresAt ?? '') <= now));
   const providers = new Set(selected.map(item => item.finding.provider));
+  assert(providers.size <= 1, 'mixed-provider corpus requires separate corpora or a comparison experiment');
+  const selectedProvider = selected[0]?.finding.provider;
+  assert(!options.providerName || !selectedProvider || options.providerName === selectedProvider, 'corpus provider identity mismatch; use a separate corpus or comparison experiment');
+  let oracle: OracleConfig;
+  if (options.oracle) oracle = structuredClone(options.oracle);
+  else if (options.profile) oracle = { profile: options.profile, pairs: options.profile === 'fixed-stat-v1' ? 64 : 8, minimumSupport: .75, maxControlViolationRate: .125, minimumEffect: 0, alpha: .05, originalSlots: selected.length, shrinkSlots: 0 };
+  else if (selected.length) {
+    oracle = structuredClone(selected[0]!.finding.oracle);
+    assert(selected.every(item => sameOracle(oracle, item.finding.oracle)), 'selected corpus oracle configurations differ; supply options.oracle or --profile');
+  } else oracle = { profile: 'paired-v1', pairs: 8, minimumSupport: .75, maxControlViolationRate: .125, minimumEffect: 0, alpha: .05, originalSlots: 0, shrinkSlots: 0 };
+  validateOracle(oracle);
+  const provider = selectedProvider ?? options.providerName ?? 'typesafe';
+  return { selected, oracle, provider, preparationHash: contentHash({ selected: selected.map(item => item.entry.id), oracle, provider }) };
+}
+export async function checkCorpus(directory: string, provider: DecisionProvider, options: { oracle?: OracleConfig; profile?: OracleConfig['profile']; expectedPreparationHash?: string; budget?: BudgetConfig; signal?: AbortSignal; secrets?: string[]; now?: string; providerName?: string } = {}): Promise<CheckReport> {
+  const root = await privateDir(directory), lock = await writerLock(root);
+  try {
+  const { quota } = await openCorpusStorage(root), all = await corpusFindings(root), now = options.now ? Date.parse(options.now) : Date.now();
+  const prepared = prepareCorpusCheck(all, { oracle: options.oracle, profile: options.profile, now, providerName: options.providerName });
+  assert(!options.expectedPreparationHash || options.expectedPreparationHash === prepared.preparationHash, 'corpus changed after check preflight; rerun check');
+  const { selected, oracle } = prepared;
   const actualProvider = provider instanceof TypeSafeProvider ? 'typesafe' : provider instanceof CloudflareProvider ? 'cloudflare' : options.providerName ?? 'custom';
-  assert((!options.providerName || options.providerName === actualProvider) && providers.size <= 1 && selected.every(item => item.finding.provider === actualProvider), 'corpus provider identity mismatch; use a separate corpus or comparison experiment');
-  const oracle = options.oracle ?? all[0]?.finding.oracle ?? { profile: 'paired-v1', pairs: 8, minimumSupport: .75, maxControlViolationRate: .125, minimumEffect: 0, alpha: .05, originalSlots: 5, shrinkSlots: 5 };
+  assert((!options.providerName || options.providerName === actualProvider) && (!selected.length || prepared.provider === actualProvider), 'corpus provider identity mismatch; use a separate corpus or comparison experiment');
   const count = Math.max(1, selected.length), calls = count * (2 + confirmationCost(oracle));
   const budget = options.budget ?? { logicalRequests: calls, httpAttempts: calls * 5, wallTimeSeconds: 600, discoveryRequests: count * 2, confirmationRequests: count * confirmationCost(oracle), shrinkRequests: 0, finalConfirmationRequests: 0 };
   if (oracle.profile === 'fixed-stat-v1') {
@@ -140,7 +162,7 @@ export async function checkCorpus(directory: string, provider: DecisionProvider,
   const ledger = new BudgetLedger(budget), slots = new HypothesisSlots(oracle);
   new EvaluationBroker(provider, ledger, { strict: true });
   const runId = randomUUID(), journalPath = join(root, `check-${runId}.jsonl`), journal = await ExecutionJournal.create(journalPath, { secrets: options.secrets, consumeBytes: bytes => quota.append(journalPath, bytes) }), broker = new EvaluationBroker(provider, ledger, { strict: true, signal: options.signal, secrets: options.secrets, journal, providerName: options.providerName });
-  const report: CheckReport = { version: 2, kind: 'check', status: 'complete', exitCode: 3, provider: selected.length ? actualProvider : 'unobserved', targetHashes: [...new Set(selected.map(item => item.finding.candidate.targetHash))], requestedModels: [...new Set(selected.map(item => JSON.parse(item.finding.candidate.basePayload).model as string))], cohort: 'unobserved', total: all.length, required: selected.length, excluded: all.length - selected.length,
+  const report: CheckReport = { version: 2, kind: 'check', status: 'complete', exitCode: 3, provider: selected.length ? actualProvider : 'unobserved', oracle, targetHashes: [...new Set(selected.map(item => item.finding.candidate.targetHash))], requestedModels: [...new Set(selected.map(item => JSON.parse(item.finding.candidate.basePayload).model as string))], cohort: 'unobserved', total: all.length, required: selected.length, excluded: all.length - selected.length,
     quarantined: all.filter(({ entry }) => entry.triage.status === 'quarantined').length, expired: selected.filter(({ entry }) => entry.triage.status === 'quarantined').length,
     results: [], budget: ledger.snapshot(), observedModels: [] };
   try {

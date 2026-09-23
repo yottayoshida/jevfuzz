@@ -32,7 +32,12 @@ function complexity(candidate: Candidate): number[] {
 }
 function smaller(a: number[], b: number[]): boolean { for (let i = 0; i < a.length; i++) { if (a[i]! < b[i]!) return true; if (a[i]! > b[i]!) return false; } return false; }
 function policyQuestions(expression: PolicyExpression): string[] { return 'question' in expression ? [expression.question] : ('all' in expression ? expression.all : expression.any).flatMap(policyQuestions); }
-const protectedQuestions = (finding: Finding) => new Set([finding.contract.question, ...(finding.policy?.rules.flatMap(rule => policyQuestions(rule.when)) ?? [])]);
+function policyTemplateQuestions(template: string): string[] { return Array.from(template.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_-]*)\}/g), match => match[1]!); }
+const protectedQuestions = (finding: Finding) => new Set([
+  finding.contract.question,
+  ...(finding.policy?.rules.flatMap(rule => [...policyQuestions(rule.when), ...policyTemplateQuestions(rule.action)]) ?? []),
+  ...(finding.policy ? policyTemplateQuestions(finding.policy.fallback) : []),
+]);
 function deletePath(root: unknown, path: string): boolean {
   const tokens = pathTokens(path); if (!tokens.length) return false; let parent: any = root;
   for (const token of tokens.slice(0, -1)) { if (!parent || typeof parent !== 'object' || !Object.hasOwn(parent, token)) return false; parent = parent[token]; }

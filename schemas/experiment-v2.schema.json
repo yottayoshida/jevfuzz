@@ -46,6 +46,9 @@
           },
           "contract": {
             "$ref": "artifacts-v2.schema.json#/$defs/contract"
+          },
+          "source": {
+            "$ref": "artifacts-v2.schema.json#/$defs/experimentSource"
           }
         }
       }

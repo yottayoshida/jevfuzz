@@ -207,6 +207,6 @@ export interface ShrinkResult {
   unconfirmedCandidate?: Candidate;
 }
 export const COMPONENT_VERSIONS = Object.freeze({
-  schema: '2', scheduler: 'batch-v1', prng: 'mulberry32-v1',
+  schema: '2', scheduler: 'batch-v2', prng: 'mulberry32-v1',
   operators: 'witness-v1', serialization: 'json-wire-v1', feedback: 'typed-v1',
 });

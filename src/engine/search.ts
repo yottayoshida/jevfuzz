@@ -4,7 +4,7 @@ import { contentHash } from '../identity.ts';
 import { assert, rng, shuffle } from '../util.ts';
 
 export interface SearchSnapshot {
-  version: 'batch-v1'; batch: number; stagnation: number; remaining: string[];
+  version: 'batch-v2'; batch: number; stagnation: number; remaining: string[];
   evaluated: string[]; features: [string, Feedback][]; signatures: [string, { observations: number; candidateId: string; bytes: number }][];
 }
 /** Batch selection is independent of worker completion order; commit() sorts IDs. */
@@ -24,7 +24,7 @@ export class BatchScheduler {
     assert(candidates.reduce((n, c) => n + Buffer.byteLength(JSON.stringify(c)), 0) <= config.maxQueueBytes, 'queue byte limit exceeded');
     this.#remaining = candidates.map(c => c.id);
     if (restored) {
-      assert(restored.version === 'batch-v1', 'scheduler version mismatch');
+      assert(restored.version === 'batch-v2', 'scheduler version mismatch');
       const partition = [...restored.remaining, ...restored.evaluated];
       assert(partition.length === candidates.length && partition.every(id => this.#candidates.has(id)) && new Set(partition).size === candidates.length, 'scheduler candidate set mismatch');
       assert(Number.isSafeInteger(restored.batch) && restored.batch >= 0 && Number.isSafeInteger(restored.stagnation) && restored.stagnation >= 0, 'invalid scheduler counters');
@@ -56,7 +56,11 @@ export class BatchScheduler {
       const quota = Math.min(limit, Math.ceil(limit * this.#config.uniformFraction));
       uniform.slice(0, quota).forEach(append);
       const scores = queue.map(candidate => ({ candidate, ...this.prior(candidate) }));
-      const ranks = Object.fromEntries((['novelty', 'boundary', 'divergence'] as const).map(field => [field, new Map([...scores].sort((a, b) => b[field] - a[field] || a.candidate.id.localeCompare(b.candidate.id)).map((item, i) => [item.candidate.id, scores.length - i]))])) as Record<'novelty' | 'boundary' | 'divergence', Map<string, number>>;
+      const ranks = Object.fromEntries((['novelty', 'boundary', 'divergence'] as const).map(field => {
+        const values = [...new Set(scores.map(item => item[field]))].sort((a, b) => b - a);
+        const denominator = values.length - 1;
+        return [field, new Map(scores.map(item => [item.candidate.id, denominator === 0 ? 0 : 1 - (values.indexOf(item[field]) / denominator)]))];
+      })) as Record<'novelty' | 'boundary' | 'divergence', Map<string, number>>;
       const rank = (field: 'novelty' | 'boundary' | 'divergence', id: string) => ranks[field].get(id)!;
       const score = (candidate: Candidate) => strategy === 'novelty' ? rank('novelty', candidate.id) : strategy === 'boundary' ? rank('boundary', candidate.id) : 3 * rank('novelty', candidate.id) + 2 * rank('boundary', candidate.id) + rank('divergence', candidate.id);
       queue.sort((a, b) => score(b) - score(a) || a.id.localeCompare(b.id)).forEach(append);
@@ -80,7 +84,7 @@ export class BatchScheduler {
     }
     this.#batch++; this.#stagnation = novel ? 0 : this.#stagnation + 1;
   }
-  snapshot(): SearchSnapshot { return structuredClone({ version: 'batch-v1', batch: this.#batch, stagnation: this.#stagnation, remaining: this.#remaining, evaluated: this.#evaluated, features: [...this.#features], signatures: [...this.#signatures] }); }
+  snapshot(): SearchSnapshot { return structuredClone({ version: 'batch-v2', batch: this.#batch, stagnation: this.#stagnation, remaining: this.#remaining, evaluated: this.#evaluated, features: [...this.#features], signatures: [...this.#signatures] }); }
   private prior(candidate: Candidate): { novelty: number; boundary: number; divergence: number } {
     const prefix = contentHash(candidate.recipe.slice(0, -1));
     const parent = [...this.#features].find(([id]) => { const c = this.#candidates.get(id)!; return c.seedId === candidate.seedId && contentHash(c.recipe) === prefix; })?.[1];

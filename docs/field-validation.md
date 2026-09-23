@@ -1,0 +1,134 @@
+# Real-workload acceptance protocol
+
+Status: preparation only. No external participant or completed real-workload
+fix loop is claimed by this document. Synthetic fixtures and the offline demo
+do not count toward field acceptance.
+
+A developer-driven preliminary check on 2026-09-23 used the actual public
+[JevFuzz issue #6](https://github.com/yottayoshida/jevfuzz/issues/6) requirement
+and the released `src/version.ts` change from `c027851a` to `6195a638`.
+The unmodified `jev-intent-review` application request builder produced one
+request; JevFuzz evaluated eight structural candidates with 16 Cloudflare
+calls to `jev-1.13.0`. No label or report-policy violation was observed, so no
+confirmation, shrink, or application fix followed. This single-input direct-API
+exercise is not a participant pilot or the planned 20–50-seed evaluation.
+The actual app CLI was not claimed to have accepted the issue's heading format.
+All acceptance counts remain zero.
+
+A second local preparation selected 20 existing private `jev-sscope` session
+states and reconstructed the historical four-question request definition from
+application commit `ec0164724c3e003ae55ffecd03854af783799e47`. The built planner
+accepted 20 cases and four proposed contracts, yielding 82 candidates and
+filtering 40 invalid candidates with zero network calls. These are legacy
+normalized input reconstructions, not the current application's two-question
+requests or original byte-identical HTTP messages. Data and relation review
+remain pending; the campaign's HTTP-attempt ceiling is zero. No participant,
+live result, or completed pilot is counted from this preparation.
+
+## Required evidence
+
+The existing v1 design requires three real workload families, two users other
+than the author, and two workload families with an actual counterexample →
+application fix → regression check. A family means a distinct application
+decision, not another question, seed, model, or mutation in the same application.
+
+Record each participant under an agreed pseudonym. Record the application,
+decision owner, allowed data, declared relations, setup time, time to understand
+the first report, invalid-contract count, replay outcome, and the participant's
+assessment. A report with no finding is still a useful pilot observation, but
+does not count as a completed fix loop. Count only trials actually performed.
+
+## Candidate applications, not completed pilots
+
+| Candidate | Existing integration boundary | Still needed |
+| --- | --- | --- |
+| jev-intent-review | Opt-in `JEV_TRACE_FILE` records a normalized Jev request; `jevfuzz import` reads its supported trace format. | A real development task, its owner's relation review, and a usable application fix. Prior public synthetic dogfood does not count. |
+| jev-sscope | `buildState` and `askJev` construct the session-evaluation request. The history endpoint contains summaries, not a complete replayable request. | Owner-selected real session data and an explicit request export. No exporter or production change is implied by this protocol. |
+| Third workload | Not identified. | An actual application and decision owner; routing/filter examples are not evidence of a deployed workload. |
+
+The two participants and the third workload must be identified before their
+acceptance rows can be completed. Recruiting or contacting people is a separate
+action requiring authorization. Provider keys and business payloads are never
+part of a public pilot record.
+
+## Per-workload procedure
+
+1. Have the owner choose a real request already appropriate for the selected Jev
+   provider. Keep the exact normalized request privately and record its hash.
+   Do not import historical responses as new confirmation evidence.
+2. Have the owner approve each relation and reducer. Write a version-2 campaign
+   using the existing campaign schema and migration guide. Preserve provider,
+   model, questions, policy, and the intended meaning of the application.
+3. Set explicit logical, HTTP-attempt, time, confirmation and shrink budgets.
+   Run `jevfuzz plan campaign.json --json` and retain the plan. Select the
+   empirical profile unless the provider meets the statistical assumptions.
+4. Run `jevfuzz fuzz campaign.json --require-confirmation-complete --json`.
+   Keep the report and record its exit code, evaluated and pending scope, model,
+   actual costs, and evidence profile. A confirmed violation exits 1; an
+   inconclusive or incomplete run must not be recorded as a healthy target.
+5. For a confirmed finding, run `jevfuzz replay finding.json --out replay.json`
+   and `jevfuzz shrink finding.json --out smaller.json`. Retain the original,
+   reduced result, lineage, fresh observations, and minimality status. A budget
+   limit or failed final confirmation is part of the result.
+6. Ask the participant to explain the declared relation, the trigger, the
+   observed effect, and the evidence limits in their own words. Record whether
+   this was possible within the original 30-minute usability target. Do not
+   replace their observation with an agent-written assessment.
+7. Explicitly accept the reviewed case using `corpus add` and `corpus triage`,
+   following the migration guide. Preserve the pre-fix corpus check.
+8. Apply a real application change selected by its owner. Record its exact
+   diff and commit. Do not weaken the contract, remove the failing fixture,
+   loosen the acceptance threshold, or label the historical answer as truth.
+9. Re-evaluate with new observations. When target identity is unchanged, use
+   `jevfuzz check`; when questions, policy, or model change, use an explicit
+   compatible `jevfuzz compare experiment.json` as documented. Retain the
+   target mapping and both source identities. Include at least one healthy
+   case to check for collateral regressions.
+10. Count a fix loop only when the original violation is confirmed, the owner
+    accepts the application change, fresh post-fix evaluation supports the
+    same relation, and healthy cases remain acceptable. Record unresolved and
+    inconclusive outcomes without counting them as successes.
+
+## Private record template
+
+Create one record per real trial in a private location. Empty fields mean
+pending, not passed. Link artifacts by local path and SHA-256; publish only an
+owner-approved redacted account. Payloads and participant contact details stay
+outside the repository.
+
+```text
+trial_id:
+date:
+participant_pseudonym:
+participant_is_not_author:
+workload_family:
+application_revision:
+decision_owner:
+real_task_description:
+approved_input_scope:
+request_hash:
+campaign_hash:
+provider_and_observed_model:
+relations_and_owner_review:
+plan_and_budget:
+setup_minutes:
+first_report_understanding_minutes:
+participant_explanation_and_assessment:
+invalid_contracts_and_triage:
+pre_fix_report_and_replay:
+shrink_result_and_limit:
+accepted_corpus_entry:
+application_fix_diff_and_revision:
+target_mapping_if_changed:
+fresh_post_fix_result:
+healthy_case_result:
+actual_logical_and_http_attempts:
+artifact_paths_and_hashes:
+outcome: pending | no-finding | inconclusive | reproduced | fixed-and-rechecked
+counts_toward_workload_acceptance:
+counts_toward_fix_loop_acceptance:
+```
+
+Do not infer participant independence, real deployment, or successful fixes
+from the existence of this template. The final acceptance ledger must link the
+actual records for all required participants, families, and fix loops.

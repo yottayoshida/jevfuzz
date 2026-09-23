@@ -68,7 +68,10 @@
                     "const": "2"
                 },
                 "scheduler": {
-                    "const": "batch-v1"
+                    "enum": [
+                        "batch-v1",
+                        "batch-v2"
+                    ]
                 },
                 "prng": {
                     "const": "mulberry32-v1"
@@ -497,6 +500,9 @@
                 },
                 "kind": {
                     "const": "check"
+                },
+                "oracle": {
+                    "$ref": "artifacts-v2.schema.json#/$defs/oracle"
                 },
                 "status": {
                     "enum": [

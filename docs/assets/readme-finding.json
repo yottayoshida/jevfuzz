@@ -1,0 +1,2610 @@
+{
+  "version": 2,
+  "kind": "shrink",
+  "original": {
+    "version": 2,
+    "kind": "finding",
+    "id": "316b5d0caa25969ee27c72ec",
+    "candidate": {
+      "id": "f18fc372aa8bdc7f553933ec",
+      "seedId": "historical-public-synthetic",
+      "basePayload": "{\"state\":{\"requirement\":{\"id\":\"R1\",\"text\":\"Disabled users cannot authenticate.\"},\"candidate\":{\"path\":\"src/plugins/loader.ts\",\"lines\":\"13-22\",\"symbol\":\"loadPlugins\",\"changed_by_pull_request\":false},\"evidence\":{\"code\":\"export async function loadPlugins(directory: string): Promise<number> {\\n  const host: PluginHost = { deleteRecord, findRecord, listRecords };\\n  let loaded = 0;\\n  for (const name of await readdir(directory)) {\\n    const plugin = (await import(join(directory, name))) as { register(host: PluginHost): void };\\n    plugin.register(host);\\n    loaded += 1;\\n  }\\n  return loaded;\\n}\",\"related\":[],\"truncated\":false}},\"model\":\"jev-latest\",\"questions\":{\"relevance\":{\"type\":\"choice\",\"instructions\":\"How does the code in `evidence.code` relate to `requirement`? `evidence.related` only shows how that code is reached.\",\"criteria\":{\"directly_enforces\":\"The code itself performs the check or behavior that `requirement` asks for\",\"may_violate\":\"The code performs, or leads straight to, an action that `requirement` restricts or governs, or hands the ability to perform it to other code (a callback, plugin or dynamically loaded module), so whether the requirement holds depends on this code\",\"supporting\":\"The code is a definition, helper, constant or test that the requirement's behavior uses, but not itself a path on which the requirement can hold or fail\",\"unrelated\":\"The code has nothing to do with `requirement`\",\"cannot_tell\":\"The evidence is too incomplete to tell how the code relates to `requirement`\"}},\"satisfaction\":{\"type\":\"choice\",\"instructions\":\"Judging only from `evidence`, does this code path meet `requirement`? A required check counts when it runs on this path before the governed action, whether it is in `evidence.code` or in a caller, route or middleware shown in `evidence.related`.\",\"criteria\":{\"satisfies\":\"The evidence shows the required check or behavior happens on this path\",\"violates\":\"The path performs the governed action, and neither `evidence.code` nor `evidence.related` shows the required check or behavior on this path\",\"insufficient_evidence\":\"Whether the path meets `requirement` depends on code that `evidence` does not show, including code this path hands the governed action to (a callback, plugin or dynamically loaded module)\",\"not_applicable\":\"`requirement` does not apply to this code\"}}}}",
+      "mutantPayload": "{\"state\":{\"evidence\":{\"code\":\"export async function loadPlugins(directory: string): Promise<number> {\\n  const host: PluginHost = { deleteRecord, findRecord, listRecords };\\n  let loaded = 0;\\n  for (const name of await readdir(directory)) {\\n    const plugin = (await import(join(directory, name))) as { register(host: PluginHost): void };\\n    plugin.register(host);\\n    loaded += 1;\\n  }\\n  return loaded;\\n}\",\"related\":[],\"truncated\":false},\"requirement\":{\"id\":\"R1\",\"text\":\"Disabled users cannot authenticate.\"},\"candidate\":{\"path\":\"src/plugins/loader.ts\",\"lines\":\"13-22\",\"symbol\":\"loadPlugins\",\"changed_by_pull_request\":false}},\"model\":\"jev-latest\",\"questions\":{\"relevance\":{\"type\":\"choice\",\"instructions\":\"How does the code in `evidence.code` relate to `requirement`? `evidence.related` only shows how that code is reached.\",\"criteria\":{\"directly_enforces\":\"The code itself performs the check or behavior that `requirement` asks for\",\"may_violate\":\"The code performs, or leads straight to, an action that `requirement` restricts or governs, or hands the ability to perform it to other code (a callback, plugin or dynamically loaded module), so whether the requirement holds depends on this code\",\"supporting\":\"The code is a definition, helper, constant or test that the requirement's behavior uses, but not itself a path on which the requirement can hold or fail\",\"unrelated\":\"The code has nothing to do with `requirement`\",\"cannot_tell\":\"The evidence is too incomplete to tell how the code relates to `requirement`\"}},\"satisfaction\":{\"type\":\"choice\",\"instructions\":\"Judging only from `evidence`, does this code path meet `requirement`? A required check counts when it runs on this path before the governed action, whether it is in `evidence.code` or in a caller, route or middleware shown in `evidence.related`.\",\"criteria\":{\"satisfies\":\"The evidence shows the required check or behavior happens on this path\",\"violates\":\"The path performs the governed action, and neither `evidence.code` nor `evidence.related` shows the required check or behavior on this path\",\"insufficient_evidence\":\"Whether the path meets `requirement` depends on code that `evidence` does not show, including code this path hands the governed action to (a callback, plugin or dynamically loaded module)\",\"not_applicable\":\"`requirement` does not apply to this code\"}}}}",
+      "baseWireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+      "mutantWireHash": "638d1db3bb5bd8879078b2efcdcb7c886f9d8b17d2f84c6be9f36f7d7a331d89",
+      "contentHash": "dee5eae06da1a4a64474d3336b4f8e2f998a9b374cc6e435f5ba48094e712499",
+      "contractHash": "fb2d94e4d0272b762f00e86b4e341edd2da801c923072233353a207c736c1785",
+      "targetHash": "5e44da419657666c5f93983cb1ddcb9c7cb4f4ad786514a53d545d80120db511",
+      "recipe": [
+        {
+          "operator": "object_key_order",
+          "version": "1",
+          "admissibility": "structural",
+          "reads": [
+            "$.state"
+          ],
+          "writes": [
+            "$.state"
+          ],
+          "requires": [],
+          "invalidates": [],
+          "orders": [
+            {
+              "path": "$.state",
+              "order": [
+                "evidence",
+                "requirement",
+                "candidate"
+              ]
+            }
+          ]
+        }
+      ],
+      "contracts": [
+        {
+          "id": "relevance-object-order",
+          "question": "relevance",
+          "relation": "invariant",
+          "projection": "choice",
+          "mutations": [
+            "object_key_order"
+          ],
+          "admissibility": "declared",
+          "assumptions": [
+            "JSON object member order does not change the relevance of the same candidate and requirement."
+          ],
+          "required": true
+        }
+      ],
+      "contractIds": [
+        "relevance-object-order"
+      ],
+      "questionMap": {
+        "relevance": "relevance",
+        "satisfaction": "satisfaction"
+      },
+      "labelMaps": {},
+      "admissibility": "structural",
+      "provenanceHash": "cfa13b5d24d58161b650c9a1caef43f5be7d15cabc85e5f3dc3d47a599bf0d32",
+      "assumptions": [
+        "JSON object member order does not change the relevance of the same candidate and requirement."
+      ]
+    },
+    "contract": {
+      "id": "relevance-object-order",
+      "question": "relevance",
+      "relation": "invariant",
+      "projection": "choice",
+      "mutations": [
+        "object_key_order"
+      ],
+      "admissibility": "declared",
+      "assumptions": [
+        "JSON object member order does not change the relevance of the same candidate and requirement."
+      ],
+      "required": true
+    },
+    "oracle": {
+      "profile": "paired-v1",
+      "pairs": 8,
+      "minimumSupport": 0.75,
+      "maxControlViolationRate": 0.125,
+      "minimumEffect": 0,
+      "alpha": 0.05,
+      "originalSlots": 5,
+      "shrinkSlots": 5
+    },
+    "confirmation": {
+      "verdict": "FAIL",
+      "reason": "PAIRED_CONFIRMED",
+      "signature": "[\"relation-v1\",\"relevance-object-order\",\"relevance\",\"invariant\",\"choice\",\"label\",\"unrelated\",\"may_violate\"]",
+      "evidenceLevel": "empirical",
+      "profileVersion": "paired-v1",
+      "discoverySamples": 2,
+      "confirmationSamples": 24,
+      "controls": 8,
+      "support": 8,
+      "controlViolations": 0,
+      "effect": 1,
+      "familySize": 0,
+      "adjustment": "none",
+      "assumptions": [
+        "Valid user-declared input relation",
+        "A/A′/B blocks are independent and stationary",
+        "Provider cache metadata is not evidence of factual correctness",
+        "Provider-side cache freshness and independence are unverified; this empirical result records repeated new calls only."
+      ],
+      "blocks": [
+        {
+          "a": {
+            "id": "1455d5c0-e6a9-4af5-9eb9-402e62c8651e",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-0-a",
+            "phase": "confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "unrelated": 0.71,
+                    "supporting": 0.01,
+                    "directly_enforces": 0,
+                    "may_violate": 0.27,
+                    "cannot_tell": 0.01
+                  },
+                  "confidence": 0.64
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "violates": 0,
+                    "not_applicable": 0.91,
+                    "insufficient_evidence": 0.09,
+                    "satisfies": 0
+                  },
+                  "confidence": 0.87
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "control": {
+            "id": "ef752e06-861c-40d6-a96c-3b0c8bf1122c",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-0-control",
+            "phase": "confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "may_violate": 0.28,
+                    "cannot_tell": 0.01,
+                    "directly_enforces": 0,
+                    "unrelated": 0.7,
+                    "supporting": 0.01
+                  },
+                  "confidence": 0.64
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "satisfies": 0,
+                    "not_applicable": 0.9,
+                    "violates": 0,
+                    "insufficient_evidence": 0.1
+                  },
+                  "confidence": 0.87
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "b": {
+            "id": "da8ee8fc-c02f-4120-aa4a-afbb9fce0cae",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-0-b",
+            "phase": "confirmation",
+            "wireHash": "638d1db3bb5bd8879078b2efcdcb7c886f9d8b17d2f84c6be9f36f7d7a331d89",
+            "transportWireHash": "c85c485974136a589e13150f0c2c42724e6393a55a261aeaba13d96f5205b91d",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "may_violate",
+                  "probabilities": {
+                    "unrelated": 0.23,
+                    "directly_enforces": 0,
+                    "may_violate": 0.73,
+                    "cannot_tell": 0.02,
+                    "supporting": 0.02
+                  },
+                  "confidence": 0.66
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "insufficient_evidence": 0.28,
+                    "not_applicable": 0.72,
+                    "violates": 0,
+                    "satisfies": 0
+                  },
+                  "confidence": 0.62
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "violation": {
+            "status": "violates",
+            "signature": "[\"relation-v1\",\"relevance-object-order\",\"relevance\",\"invariant\",\"choice\",\"label\",\"unrelated\",\"may_violate\"]",
+            "before": "unrelated",
+            "after": "may_violate",
+            "effect": 1,
+            "reasons": [
+              "RELATION_VIOLATED"
+            ]
+          },
+          "sham": {
+            "status": "holds",
+            "reasons": [],
+            "before": "unrelated",
+            "after": "unrelated"
+          }
+        },
+        {
+          "a": {
+            "id": "6af9608d-f64c-4a71-a055-7fdf807e37f7",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-1-a",
+            "phase": "confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "directly_enforces": 0,
+                    "unrelated": 0.68,
+                    "may_violate": 0.3,
+                    "cannot_tell": 0.01,
+                    "supporting": 0.01
+                  },
+                  "confidence": 0.6
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "not_applicable": 0.92,
+                    "insufficient_evidence": 0.08,
+                    "violates": 0,
+                    "satisfies": 0
+                  },
+                  "confidence": 0.89
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "control": {
+            "id": "067b1b14-0bd3-4435-b7ae-85129b07d95f",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-1-control",
+            "phase": "confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "cannot_tell": 0.01,
+                    "directly_enforces": 0,
+                    "unrelated": 0.73,
+                    "may_violate": 0.25,
+                    "supporting": 0.01
+                  },
+                  "confidence": 0.66
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "insufficient_evidence": 0.07,
+                    "satisfies": 0,
+                    "not_applicable": 0.93,
+                    "violates": 0
+                  },
+                  "confidence": 0.9
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "b": {
+            "id": "ccc77b06-7cf8-44ac-9c8f-b385ce283e42",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-1-b",
+            "phase": "confirmation",
+            "wireHash": "638d1db3bb5bd8879078b2efcdcb7c886f9d8b17d2f84c6be9f36f7d7a331d89",
+            "transportWireHash": "c85c485974136a589e13150f0c2c42724e6393a55a261aeaba13d96f5205b91d",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "may_violate",
+                  "probabilities": {
+                    "unrelated": 0.33,
+                    "supporting": 0.03,
+                    "directly_enforces": 0,
+                    "cannot_tell": 0.02,
+                    "may_violate": 0.62
+                  },
+                  "confidence": 0.52
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "satisfies": 0,
+                    "insufficient_evidence": 0.21,
+                    "not_applicable": 0.79,
+                    "violates": 0
+                  },
+                  "confidence": 0.72
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "violation": {
+            "status": "violates",
+            "signature": "[\"relation-v1\",\"relevance-object-order\",\"relevance\",\"invariant\",\"choice\",\"label\",\"unrelated\",\"may_violate\"]",
+            "before": "unrelated",
+            "after": "may_violate",
+            "effect": 1,
+            "reasons": [
+              "RELATION_VIOLATED"
+            ]
+          },
+          "sham": {
+            "status": "holds",
+            "reasons": [],
+            "before": "unrelated",
+            "after": "unrelated"
+          }
+        },
+        {
+          "a": {
+            "id": "71d99a18-5e45-4e1d-a1f7-9d7aca590f56",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-2-a",
+            "phase": "confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "supporting": 0.01,
+                    "directly_enforces": 0,
+                    "unrelated": 0.7,
+                    "cannot_tell": 0.01,
+                    "may_violate": 0.28
+                  },
+                  "confidence": 0.63
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "violates": 0,
+                    "not_applicable": 0.91,
+                    "insufficient_evidence": 0.09,
+                    "satisfies": 0
+                  },
+                  "confidence": 0.87
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "control": {
+            "id": "9c29be38-4e3e-4035-8eb3-0165f8a4da74",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-2-control",
+            "phase": "confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "unrelated": 0.67,
+                    "may_violate": 0.31,
+                    "supporting": 0.01,
+                    "cannot_tell": 0.01,
+                    "directly_enforces": 0
+                  },
+                  "confidence": 0.59
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "violates": 0,
+                    "insufficient_evidence": 0.09,
+                    "satisfies": 0,
+                    "not_applicable": 0.91
+                  },
+                  "confidence": 0.88
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "b": {
+            "id": "a200d27a-79d9-4318-a312-19a122cd4620",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-2-b",
+            "phase": "confirmation",
+            "wireHash": "638d1db3bb5bd8879078b2efcdcb7c886f9d8b17d2f84c6be9f36f7d7a331d89",
+            "transportWireHash": "c85c485974136a589e13150f0c2c42724e6393a55a261aeaba13d96f5205b91d",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "may_violate",
+                  "probabilities": {
+                    "unrelated": 0.31,
+                    "directly_enforces": 0,
+                    "may_violate": 0.65,
+                    "supporting": 0.02,
+                    "cannot_tell": 0.02
+                  },
+                  "confidence": 0.55
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "insufficient_evidence": 0.26,
+                    "not_applicable": 0.74,
+                    "violates": 0,
+                    "satisfies": 0
+                  },
+                  "confidence": 0.64
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "violation": {
+            "status": "violates",
+            "signature": "[\"relation-v1\",\"relevance-object-order\",\"relevance\",\"invariant\",\"choice\",\"label\",\"unrelated\",\"may_violate\"]",
+            "before": "unrelated",
+            "after": "may_violate",
+            "effect": 1,
+            "reasons": [
+              "RELATION_VIOLATED"
+            ]
+          },
+          "sham": {
+            "status": "holds",
+            "reasons": [],
+            "before": "unrelated",
+            "after": "unrelated"
+          }
+        },
+        {
+          "a": {
+            "id": "4d03c7f8-1777-4eff-ae93-476ad7186b07",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-3-a",
+            "phase": "confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "cannot_tell": 0.01,
+                    "directly_enforces": 0,
+                    "unrelated": 0.7,
+                    "may_violate": 0.28,
+                    "supporting": 0.01
+                  },
+                  "confidence": 0.62
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "not_applicable": 0.93,
+                    "violates": 0,
+                    "insufficient_evidence": 0.07,
+                    "satisfies": 0
+                  },
+                  "confidence": 0.91
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "control": {
+            "id": "a7dd5945-a022-4ce8-bbc0-7639c401d7a8",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-3-control",
+            "phase": "confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "cannot_tell": 0.01,
+                    "may_violate": 0.26,
+                    "supporting": 0.01,
+                    "unrelated": 0.72,
+                    "directly_enforces": 0
+                  },
+                  "confidence": 0.66
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "violates": 0,
+                    "insufficient_evidence": 0.08,
+                    "satisfies": 0,
+                    "not_applicable": 0.92
+                  },
+                  "confidence": 0.89
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "b": {
+            "id": "b22785c2-5450-447e-907b-0ecd9d063d21",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-3-b",
+            "phase": "confirmation",
+            "wireHash": "638d1db3bb5bd8879078b2efcdcb7c886f9d8b17d2f84c6be9f36f7d7a331d89",
+            "transportWireHash": "c85c485974136a589e13150f0c2c42724e6393a55a261aeaba13d96f5205b91d",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "may_violate",
+                  "probabilities": {
+                    "directly_enforces": 0,
+                    "may_violate": 0.62,
+                    "cannot_tell": 0.02,
+                    "unrelated": 0.33,
+                    "supporting": 0.03
+                  },
+                  "confidence": 0.52
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "violates": 0,
+                    "not_applicable": 0.8,
+                    "insufficient_evidence": 0.2,
+                    "satisfies": 0
+                  },
+                  "confidence": 0.73
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "violation": {
+            "status": "violates",
+            "signature": "[\"relation-v1\",\"relevance-object-order\",\"relevance\",\"invariant\",\"choice\",\"label\",\"unrelated\",\"may_violate\"]",
+            "before": "unrelated",
+            "after": "may_violate",
+            "effect": 1,
+            "reasons": [
+              "RELATION_VIOLATED"
+            ]
+          },
+          "sham": {
+            "status": "holds",
+            "reasons": [],
+            "before": "unrelated",
+            "after": "unrelated"
+          }
+        },
+        {
+          "a": {
+            "id": "0aa32e9f-c24a-4739-8fed-c9385160cb5d",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-4-a",
+            "phase": "confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "unrelated": 0.73,
+                    "cannot_tell": 0.01,
+                    "directly_enforces": 0,
+                    "supporting": 0.01,
+                    "may_violate": 0.25
+                  },
+                  "confidence": 0.67
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "insufficient_evidence": 0.11,
+                    "not_applicable": 0.89,
+                    "satisfies": 0,
+                    "violates": 0
+                  },
+                  "confidence": 0.85
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "control": {
+            "id": "d2867718-0693-41d3-bea0-e4ac1d467dc1",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-4-control",
+            "phase": "confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "unrelated": 0.73,
+                    "supporting": 0.01,
+                    "cannot_tell": 0.01,
+                    "directly_enforces": 0,
+                    "may_violate": 0.25
+                  },
+                  "confidence": 0.68
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "insufficient_evidence": 0.08,
+                    "not_applicable": 0.92,
+                    "violates": 0,
+                    "satisfies": 0
+                  },
+                  "confidence": 0.88
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "b": {
+            "id": "0b2bd541-3b78-4cd9-b444-b67bd0b3c4ec",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-4-b",
+            "phase": "confirmation",
+            "wireHash": "638d1db3bb5bd8879078b2efcdcb7c886f9d8b17d2f84c6be9f36f7d7a331d89",
+            "transportWireHash": "c85c485974136a589e13150f0c2c42724e6393a55a261aeaba13d96f5205b91d",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "may_violate",
+                  "probabilities": {
+                    "unrelated": 0.26,
+                    "directly_enforces": 0,
+                    "may_violate": 0.69,
+                    "supporting": 0.03,
+                    "cannot_tell": 0.02
+                  },
+                  "confidence": 0.61
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "satisfies": 0,
+                    "insufficient_evidence": 0.26,
+                    "violates": 0,
+                    "not_applicable": 0.74
+                  },
+                  "confidence": 0.64
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "violation": {
+            "status": "violates",
+            "signature": "[\"relation-v1\",\"relevance-object-order\",\"relevance\",\"invariant\",\"choice\",\"label\",\"unrelated\",\"may_violate\"]",
+            "before": "unrelated",
+            "after": "may_violate",
+            "effect": 1,
+            "reasons": [
+              "RELATION_VIOLATED"
+            ]
+          },
+          "sham": {
+            "status": "holds",
+            "reasons": [],
+            "before": "unrelated",
+            "after": "unrelated"
+          }
+        },
+        {
+          "a": {
+            "id": "2d005e9b-d07a-494d-8c7e-bd8fee777140",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-5-a",
+            "phase": "confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "may_violate": 0.28,
+                    "directly_enforces": 0,
+                    "supporting": 0.01,
+                    "cannot_tell": 0.01,
+                    "unrelated": 0.7
+                  },
+                  "confidence": 0.64
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "insufficient_evidence": 0.1,
+                    "violates": 0,
+                    "not_applicable": 0.9,
+                    "satisfies": 0
+                  },
+                  "confidence": 0.86
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "control": {
+            "id": "1483e72f-4486-42cd-973a-7e5fef6ee571",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-5-control",
+            "phase": "confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "supporting": 0.01,
+                    "may_violate": 0.25,
+                    "unrelated": 0.73,
+                    "directly_enforces": 0,
+                    "cannot_tell": 0.01
+                  },
+                  "confidence": 0.67
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "not_applicable": 0.91,
+                    "satisfies": 0,
+                    "insufficient_evidence": 0.09,
+                    "violates": 0
+                  },
+                  "confidence": 0.87
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "b": {
+            "id": "d680484f-5cd4-4ebf-8866-7d4f537cae1e",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-5-b",
+            "phase": "confirmation",
+            "wireHash": "638d1db3bb5bd8879078b2efcdcb7c886f9d8b17d2f84c6be9f36f7d7a331d89",
+            "transportWireHash": "c85c485974136a589e13150f0c2c42724e6393a55a261aeaba13d96f5205b91d",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "may_violate",
+                  "probabilities": {
+                    "cannot_tell": 0.02,
+                    "supporting": 0.03,
+                    "may_violate": 0.69,
+                    "directly_enforces": 0,
+                    "unrelated": 0.26
+                  },
+                  "confidence": 0.61
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "insufficient_evidence": 0.22,
+                    "satisfies": 0,
+                    "not_applicable": 0.78,
+                    "violates": 0
+                  },
+                  "confidence": 0.71
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "violation": {
+            "status": "violates",
+            "signature": "[\"relation-v1\",\"relevance-object-order\",\"relevance\",\"invariant\",\"choice\",\"label\",\"unrelated\",\"may_violate\"]",
+            "before": "unrelated",
+            "after": "may_violate",
+            "effect": 1,
+            "reasons": [
+              "RELATION_VIOLATED"
+            ]
+          },
+          "sham": {
+            "status": "holds",
+            "reasons": [],
+            "before": "unrelated",
+            "after": "unrelated"
+          }
+        },
+        {
+          "a": {
+            "id": "e59abde7-48d4-4a92-9546-0ec0be7845ef",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-6-a",
+            "phase": "confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "unrelated": 0.72,
+                    "supporting": 0.01,
+                    "directly_enforces": 0,
+                    "cannot_tell": 0.01,
+                    "may_violate": 0.26
+                  },
+                  "confidence": 0.65
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "not_applicable": 0.93,
+                    "violates": 0,
+                    "satisfies": 0,
+                    "insufficient_evidence": 0.07
+                  },
+                  "confidence": 0.91
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "control": {
+            "id": "43518ea6-d5e7-4aa8-ad8f-e7a7c308835b",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-6-control",
+            "phase": "confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "directly_enforces": 0,
+                    "unrelated": 0.67,
+                    "cannot_tell": 0.01,
+                    "may_violate": 0.31,
+                    "supporting": 0.01
+                  },
+                  "confidence": 0.59
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "violates": 0,
+                    "not_applicable": 0.9,
+                    "insufficient_evidence": 0.1,
+                    "satisfies": 0
+                  },
+                  "confidence": 0.87
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "b": {
+            "id": "7614126d-9537-479a-bf78-b3a8eba60a2a",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-6-b",
+            "phase": "confirmation",
+            "wireHash": "638d1db3bb5bd8879078b2efcdcb7c886f9d8b17d2f84c6be9f36f7d7a331d89",
+            "transportWireHash": "c85c485974136a589e13150f0c2c42724e6393a55a261aeaba13d96f5205b91d",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "may_violate",
+                  "probabilities": {
+                    "unrelated": 0.3,
+                    "directly_enforces": 0,
+                    "cannot_tell": 0.02,
+                    "supporting": 0.03,
+                    "may_violate": 0.65
+                  },
+                  "confidence": 0.57
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "insufficient_evidence": 0.2,
+                    "not_applicable": 0.8,
+                    "satisfies": 0,
+                    "violates": 0
+                  },
+                  "confidence": 0.73
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "violation": {
+            "status": "violates",
+            "signature": "[\"relation-v1\",\"relevance-object-order\",\"relevance\",\"invariant\",\"choice\",\"label\",\"unrelated\",\"may_violate\"]",
+            "before": "unrelated",
+            "after": "may_violate",
+            "effect": 1,
+            "reasons": [
+              "RELATION_VIOLATED"
+            ]
+          },
+          "sham": {
+            "status": "holds",
+            "reasons": [],
+            "before": "unrelated",
+            "after": "unrelated"
+          }
+        },
+        {
+          "a": {
+            "id": "7d31b4f2-46a2-492f-8163-53a00eda40c9",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-7-a",
+            "phase": "confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "may_violate": 0.28,
+                    "directly_enforces": 0,
+                    "unrelated": 0.7,
+                    "supporting": 0.01,
+                    "cannot_tell": 0.01
+                  },
+                  "confidence": 0.63
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "not_applicable": 0.9,
+                    "violates": 0,
+                    "satisfies": 0,
+                    "insufficient_evidence": 0.1
+                  },
+                  "confidence": 0.86
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "control": {
+            "id": "8186935e-0a12-4cce-a26d-7250f696b6e8",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-7-control",
+            "phase": "confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "directly_enforces": 0,
+                    "may_violate": 0.27,
+                    "supporting": 0.01,
+                    "cannot_tell": 0.01,
+                    "unrelated": 0.71
+                  },
+                  "confidence": 0.64
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "satisfies": 0,
+                    "violates": 0,
+                    "insufficient_evidence": 0.11,
+                    "not_applicable": 0.89
+                  },
+                  "confidence": 0.85
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "b": {
+            "id": "bbe689fa-b7d1-48a3-bac7-1614e779cd1b",
+            "operationId": "f1cbd3d2-13ac-468c-aa19-d33b6d20bcdc-7-b",
+            "phase": "confirmation",
+            "wireHash": "638d1db3bb5bd8879078b2efcdcb7c886f9d8b17d2f84c6be9f36f7d7a331d89",
+            "transportWireHash": "c85c485974136a589e13150f0c2c42724e6393a55a261aeaba13d96f5205b91d",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "may_violate",
+                  "probabilities": {
+                    "unrelated": 0.31,
+                    "may_violate": 0.64,
+                    "supporting": 0.03,
+                    "directly_enforces": 0,
+                    "cannot_tell": 0.02
+                  },
+                  "confidence": 0.55
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "satisfies": 0,
+                    "not_applicable": 0.78,
+                    "violates": 0,
+                    "insufficient_evidence": 0.22
+                  },
+                  "confidence": 0.7
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "violation": {
+            "status": "violates",
+            "signature": "[\"relation-v1\",\"relevance-object-order\",\"relevance\",\"invariant\",\"choice\",\"label\",\"unrelated\",\"may_violate\"]",
+            "before": "unrelated",
+            "after": "may_violate",
+            "effect": 1,
+            "reasons": [
+              "RELATION_VIOLATED"
+            ]
+          },
+          "sham": {
+            "status": "holds",
+            "reasons": [],
+            "before": "unrelated",
+            "after": "unrelated"
+          }
+        }
+      ],
+      "observedModels": [
+        "jev-1.13.0"
+      ]
+    },
+    "provider": "cloudflare",
+    "reducers": {
+      "independentQuestions": false,
+      "optionalStatePaths": [],
+      "unorderedArrayPaths": [],
+      "prosePaths": []
+    },
+    "fingerprint": "f0316e87474a6909b874000222704c25722b690b45c1aa387341b896a72345c8",
+    "replayability": "full"
+  },
+  "finding": {
+    "version": 2,
+    "kind": "finding",
+    "id": "9369a216c7da4088f66115a4",
+    "candidate": {
+      "id": "b09ddffb04dc429ae7f8cebc",
+      "seedId": "historical-public-synthetic",
+      "basePayload": "{\"state\":{\"requirement\":{\"id\":\"R1\",\"text\":\"Disabled users cannot authenticate.\"},\"candidate\":{\"path\":\"src/plugins/loader.ts\",\"lines\":\"13-22\",\"symbol\":\"loadPlugins\",\"changed_by_pull_request\":false},\"evidence\":{\"code\":\"export async function loadPlugins(directory: string): Promise<number> {\\n  const host: PluginHost = { deleteRecord, findRecord, listRecords };\\n  let loaded = 0;\\n  for (const name of await readdir(directory)) {\\n    const plugin = (await import(join(directory, name))) as { register(host: PluginHost): void };\\n    plugin.register(host);\\n    loaded += 1;\\n  }\\n  return loaded;\\n}\",\"related\":[],\"truncated\":false}},\"model\":\"jev-latest\",\"questions\":{\"relevance\":{\"type\":\"choice\",\"instructions\":\"How does the code in `evidence.code` relate to `requirement`? `evidence.related` only shows how that code is reached.\",\"criteria\":{\"directly_enforces\":\"The code itself performs the check or behavior that `requirement` asks for\",\"may_violate\":\"The code performs, or leads straight to, an action that `requirement` restricts or governs, or hands the ability to perform it to other code (a callback, plugin or dynamically loaded module), so whether the requirement holds depends on this code\",\"supporting\":\"The code is a definition, helper, constant or test that the requirement's behavior uses, but not itself a path on which the requirement can hold or fail\",\"unrelated\":\"The code has nothing to do with `requirement`\",\"cannot_tell\":\"The evidence is too incomplete to tell how the code relates to `requirement`\"}},\"satisfaction\":{\"type\":\"choice\",\"instructions\":\"Judging only from `evidence`, does this code path meet `requirement`? A required check counts when it runs on this path before the governed action, whether it is in `evidence.code` or in a caller, route or middleware shown in `evidence.related`.\",\"criteria\":{\"satisfies\":\"The evidence shows the required check or behavior happens on this path\",\"violates\":\"The path performs the governed action, and neither `evidence.code` nor `evidence.related` shows the required check or behavior on this path\",\"insufficient_evidence\":\"Whether the path meets `requirement` depends on code that `evidence` does not show, including code this path hands the governed action to (a callback, plugin or dynamically loaded module)\",\"not_applicable\":\"`requirement` does not apply to this code\"}}}}",
+      "mutantPayload": "{\"state\":{\"evidence\":{\"code\":\"export async function loadPlugins(directory: string): Promise<number> {\\n  const host: PluginHost = { deleteRecord, findRecord, listRecords };\\n  let loaded = 0;\\n  for (const name of await readdir(directory)) {\\n    const plugin = (await import(join(directory, name))) as { register(host: PluginHost): void };\\n    plugin.register(host);\\n    loaded += 1;\\n  }\\n  return loaded;\\n}\",\"related\":[],\"truncated\":false},\"candidate\":{\"path\":\"src/plugins/loader.ts\",\"lines\":\"13-22\",\"symbol\":\"loadPlugins\",\"changed_by_pull_request\":false},\"requirement\":{\"id\":\"R1\",\"text\":\"Disabled users cannot authenticate.\"}},\"model\":\"jev-latest\",\"questions\":{\"relevance\":{\"type\":\"choice\",\"instructions\":\"How does the code in `evidence.code` relate to `requirement`? `evidence.related` only shows how that code is reached.\",\"criteria\":{\"directly_enforces\":\"The code itself performs the check or behavior that `requirement` asks for\",\"may_violate\":\"The code performs, or leads straight to, an action that `requirement` restricts or governs, or hands the ability to perform it to other code (a callback, plugin or dynamically loaded module), so whether the requirement holds depends on this code\",\"supporting\":\"The code is a definition, helper, constant or test that the requirement's behavior uses, but not itself a path on which the requirement can hold or fail\",\"unrelated\":\"The code has nothing to do with `requirement`\",\"cannot_tell\":\"The evidence is too incomplete to tell how the code relates to `requirement`\"}},\"satisfaction\":{\"type\":\"choice\",\"instructions\":\"Judging only from `evidence`, does this code path meet `requirement`? A required check counts when it runs on this path before the governed action, whether it is in `evidence.code` or in a caller, route or middleware shown in `evidence.related`.\",\"criteria\":{\"satisfies\":\"The evidence shows the required check or behavior happens on this path\",\"violates\":\"The path performs the governed action, and neither `evidence.code` nor `evidence.related` shows the required check or behavior on this path\",\"insufficient_evidence\":\"Whether the path meets `requirement` depends on code that `evidence` does not show, including code this path hands the governed action to (a callback, plugin or dynamically loaded module)\",\"not_applicable\":\"`requirement` does not apply to this code\"}}}}",
+      "baseWireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+      "mutantWireHash": "296c2b7ffcd0f95be2be65d77cd95dccf8c48d7264f68dc097e49f7318e43334",
+      "contentHash": "dee5eae06da1a4a64474d3336b4f8e2f998a9b374cc6e435f5ba48094e712499",
+      "contractHash": "fb2d94e4d0272b762f00e86b4e341edd2da801c923072233353a207c736c1785",
+      "targetHash": "5e44da419657666c5f93983cb1ddcb9c7cb4f4ad786514a53d545d80120db511",
+      "recipe": [
+        {
+          "operator": "object_key_order",
+          "version": "1",
+          "admissibility": "structural",
+          "reads": [
+            "$.state"
+          ],
+          "writes": [
+            "$.state"
+          ],
+          "requires": [],
+          "invalidates": [],
+          "orders": [
+            {
+              "path": "$.state",
+              "order": [
+                "evidence",
+                "candidate",
+                "requirement"
+              ]
+            }
+          ]
+        }
+      ],
+      "contracts": [
+        {
+          "id": "relevance-object-order",
+          "question": "relevance",
+          "relation": "invariant",
+          "projection": "choice",
+          "mutations": [
+            "object_key_order"
+          ],
+          "admissibility": "declared",
+          "assumptions": [
+            "JSON object member order does not change the relevance of the same candidate and requirement."
+          ],
+          "required": true
+        }
+      ],
+      "contractIds": [
+        "relevance-object-order"
+      ],
+      "questionMap": {
+        "relevance": "relevance",
+        "satisfaction": "satisfaction"
+      },
+      "labelMaps": {},
+      "admissibility": "structural",
+      "provenanceHash": "11bcdda4ec9fef85cd93d475bfac28b3d3f395f6d0f951bb671693e4223851c2",
+      "assumptions": [
+        "JSON object member order does not change the relevance of the same candidate and requirement."
+      ]
+    },
+    "contract": {
+      "id": "relevance-object-order",
+      "question": "relevance",
+      "relation": "invariant",
+      "projection": "choice",
+      "mutations": [
+        "object_key_order"
+      ],
+      "admissibility": "declared",
+      "assumptions": [
+        "JSON object member order does not change the relevance of the same candidate and requirement."
+      ],
+      "required": true
+    },
+    "oracle": {
+      "profile": "paired-v1",
+      "pairs": 8,
+      "minimumSupport": 0.75,
+      "maxControlViolationRate": 0.125,
+      "minimumEffect": 0,
+      "alpha": 0.05,
+      "originalSlots": 5,
+      "shrinkSlots": 5
+    },
+    "confirmation": {
+      "verdict": "FAIL",
+      "reason": "PAIRED_CONFIRMED",
+      "signature": "[\"relation-v1\",\"relevance-object-order\",\"relevance\",\"invariant\",\"choice\",\"label\",\"unrelated\",\"may_violate\"]",
+      "evidenceLevel": "empirical",
+      "profileVersion": "paired-v1",
+      "discoverySamples": 0,
+      "confirmationSamples": 24,
+      "controls": 8,
+      "support": 8,
+      "controlViolations": 0,
+      "effect": 1,
+      "familySize": 0,
+      "adjustment": "none",
+      "assumptions": [
+        "Valid user-declared input relation",
+        "A/A′/B blocks are independent and stationary",
+        "Provider cache metadata is not evidence of factual correctness",
+        "Provider-side cache freshness and independence are unverified; this empirical result records repeated new calls only."
+      ],
+      "blocks": [
+        {
+          "a": {
+            "id": "1078e124-f1e6-488e-b568-806ec10ef13b",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-0-a",
+            "phase": "final-confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "unrelated": 0.68,
+                    "supporting": 0.01,
+                    "cannot_tell": 0.01,
+                    "directly_enforces": 0,
+                    "may_violate": 0.3
+                  },
+                  "confidence": 0.6
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "insufficient_evidence": 0.09,
+                    "not_applicable": 0.91,
+                    "violates": 0,
+                    "satisfies": 0
+                  },
+                  "confidence": 0.88
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "control": {
+            "id": "4a15e958-0f35-401a-9ced-ac3d72f70425",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-0-control",
+            "phase": "final-confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "unrelated": 0.69,
+                    "supporting": 0.01,
+                    "may_violate": 0.29,
+                    "directly_enforces": 0,
+                    "cannot_tell": 0.01
+                  },
+                  "confidence": 0.62
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "insufficient_evidence": 0.08,
+                    "satisfies": 0,
+                    "not_applicable": 0.92,
+                    "violates": 0
+                  },
+                  "confidence": 0.88
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "b": {
+            "id": "b139f1bb-7ef2-42e3-af09-275cbfbf4adf",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-0-b",
+            "phase": "final-confirmation",
+            "wireHash": "296c2b7ffcd0f95be2be65d77cd95dccf8c48d7264f68dc097e49f7318e43334",
+            "transportWireHash": "e9417bee472e99876d1f1fb12db882b2215197c80e4ae22920d4aed7d74a9fcd",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "may_violate",
+                  "probabilities": {
+                    "directly_enforces": 0,
+                    "may_violate": 0.76,
+                    "supporting": 0.04,
+                    "unrelated": 0.18,
+                    "cannot_tell": 0.02
+                  },
+                  "confidence": 0.7
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "insufficient_evidence": 0.44,
+                    "not_applicable": 0.56,
+                    "satisfies": 0,
+                    "violates": 0
+                  },
+                  "confidence": 0.41
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "violation": {
+            "status": "violates",
+            "signature": "[\"relation-v1\",\"relevance-object-order\",\"relevance\",\"invariant\",\"choice\",\"label\",\"unrelated\",\"may_violate\"]",
+            "before": "unrelated",
+            "after": "may_violate",
+            "effect": 1,
+            "reasons": [
+              "RELATION_VIOLATED"
+            ]
+          },
+          "sham": {
+            "status": "holds",
+            "reasons": [],
+            "before": "unrelated",
+            "after": "unrelated"
+          }
+        },
+        {
+          "a": {
+            "id": "c005e36f-1a3a-43f8-8f94-e6b55ab7115b",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-1-a",
+            "phase": "final-confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "may_violate": 0.27,
+                    "directly_enforces": 0,
+                    "unrelated": 0.71,
+                    "supporting": 0.01,
+                    "cannot_tell": 0.01
+                  },
+                  "confidence": 0.64
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "insufficient_evidence": 0.09,
+                    "satisfies": 0,
+                    "not_applicable": 0.91,
+                    "violates": 0
+                  },
+                  "confidence": 0.88
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "control": {
+            "id": "9fb56ff7-17bc-4d12-96ba-6ca97a43f84c",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-1-control",
+            "phase": "final-confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "may_violate": 0.28,
+                    "directly_enforces": 0,
+                    "unrelated": 0.7,
+                    "supporting": 0.01,
+                    "cannot_tell": 0.01
+                  },
+                  "confidence": 0.63
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "violates": 0,
+                    "not_applicable": 0.92,
+                    "insufficient_evidence": 0.08,
+                    "satisfies": 0
+                  },
+                  "confidence": 0.88
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "b": {
+            "id": "38b7c219-f423-4c2e-a948-a4e4536e2ae8",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-1-b",
+            "phase": "final-confirmation",
+            "wireHash": "296c2b7ffcd0f95be2be65d77cd95dccf8c48d7264f68dc097e49f7318e43334",
+            "transportWireHash": "e9417bee472e99876d1f1fb12db882b2215197c80e4ae22920d4aed7d74a9fcd",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "may_violate",
+                  "probabilities": {
+                    "unrelated": 0.26,
+                    "cannot_tell": 0.02,
+                    "directly_enforces": 0,
+                    "supporting": 0.03,
+                    "may_violate": 0.68
+                  },
+                  "confidence": 0.6
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "violates": 0,
+                    "not_applicable": 0.63,
+                    "satisfies": 0,
+                    "insufficient_evidence": 0.37
+                  },
+                  "confidence": 0.5
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "violation": {
+            "status": "violates",
+            "signature": "[\"relation-v1\",\"relevance-object-order\",\"relevance\",\"invariant\",\"choice\",\"label\",\"unrelated\",\"may_violate\"]",
+            "before": "unrelated",
+            "after": "may_violate",
+            "effect": 1,
+            "reasons": [
+              "RELATION_VIOLATED"
+            ]
+          },
+          "sham": {
+            "status": "holds",
+            "reasons": [],
+            "before": "unrelated",
+            "after": "unrelated"
+          }
+        },
+        {
+          "a": {
+            "id": "29450828-cd3a-40d5-b750-b26c5a84da23",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-2-a",
+            "phase": "final-confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "unrelated": 0.71,
+                    "may_violate": 0.27,
+                    "cannot_tell": 0.01,
+                    "directly_enforces": 0,
+                    "supporting": 0.01
+                  },
+                  "confidence": 0.65
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "violates": 0,
+                    "satisfies": 0,
+                    "not_applicable": 0.9,
+                    "insufficient_evidence": 0.1
+                  },
+                  "confidence": 0.86
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "control": {
+            "id": "ff4b9536-9684-4e12-b55a-00bf0ae73a64",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-2-control",
+            "phase": "final-confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "directly_enforces": 0,
+                    "cannot_tell": 0.01,
+                    "supporting": 0.01,
+                    "unrelated": 0.72,
+                    "may_violate": 0.26
+                  },
+                  "confidence": 0.65
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "satisfies": 0,
+                    "insufficient_evidence": 0.07,
+                    "not_applicable": 0.93,
+                    "violates": 0
+                  },
+                  "confidence": 0.9
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "b": {
+            "id": "11e50f32-2439-4877-9b8a-a9b1d51fa010",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-2-b",
+            "phase": "final-confirmation",
+            "wireHash": "296c2b7ffcd0f95be2be65d77cd95dccf8c48d7264f68dc097e49f7318e43334",
+            "transportWireHash": "e9417bee472e99876d1f1fb12db882b2215197c80e4ae22920d4aed7d74a9fcd",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "may_violate",
+                  "probabilities": {
+                    "supporting": 0.03,
+                    "may_violate": 0.72,
+                    "unrelated": 0.23,
+                    "directly_enforces": 0,
+                    "cannot_tell": 0.02
+                  },
+                  "confidence": 0.64
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "not_applicable": 0.66,
+                    "satisfies": 0,
+                    "violates": 0,
+                    "insufficient_evidence": 0.34
+                  },
+                  "confidence": 0.54
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "violation": {
+            "status": "violates",
+            "signature": "[\"relation-v1\",\"relevance-object-order\",\"relevance\",\"invariant\",\"choice\",\"label\",\"unrelated\",\"may_violate\"]",
+            "before": "unrelated",
+            "after": "may_violate",
+            "effect": 1,
+            "reasons": [
+              "RELATION_VIOLATED"
+            ]
+          },
+          "sham": {
+            "status": "holds",
+            "reasons": [],
+            "before": "unrelated",
+            "after": "unrelated"
+          }
+        },
+        {
+          "a": {
+            "id": "d8d72f46-eda0-4370-a2f0-a240d312952d",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-3-a",
+            "phase": "final-confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "directly_enforces": 0,
+                    "unrelated": 0.69,
+                    "may_violate": 0.29,
+                    "cannot_tell": 0.01,
+                    "supporting": 0.01
+                  },
+                  "confidence": 0.62
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "insufficient_evidence": 0.11,
+                    "not_applicable": 0.89,
+                    "satisfies": 0,
+                    "violates": 0
+                  },
+                  "confidence": 0.85
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "control": {
+            "id": "f8c3b8f2-f478-40dc-8108-a40cd0ef3dc5",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-3-control",
+            "phase": "final-confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "unrelated": 0.7,
+                    "supporting": 0.01,
+                    "may_violate": 0.28,
+                    "directly_enforces": 0,
+                    "cannot_tell": 0.01
+                  },
+                  "confidence": 0.62
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "insufficient_evidence": 0.08,
+                    "satisfies": 0,
+                    "not_applicable": 0.92,
+                    "violates": 0
+                  },
+                  "confidence": 0.89
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "b": {
+            "id": "636deccd-93de-4f7a-b88b-ba688597757d",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-3-b",
+            "phase": "final-confirmation",
+            "wireHash": "296c2b7ffcd0f95be2be65d77cd95dccf8c48d7264f68dc097e49f7318e43334",
+            "transportWireHash": "e9417bee472e99876d1f1fb12db882b2215197c80e4ae22920d4aed7d74a9fcd",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "may_violate",
+                  "probabilities": {
+                    "unrelated": 0.22,
+                    "may_violate": 0.73,
+                    "cannot_tell": 0.02,
+                    "directly_enforces": 0,
+                    "supporting": 0.03
+                  },
+                  "confidence": 0.66
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "satisfies": 0,
+                    "not_applicable": 0.62,
+                    "violates": 0,
+                    "insufficient_evidence": 0.38
+                  },
+                  "confidence": 0.49
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "violation": {
+            "status": "violates",
+            "signature": "[\"relation-v1\",\"relevance-object-order\",\"relevance\",\"invariant\",\"choice\",\"label\",\"unrelated\",\"may_violate\"]",
+            "before": "unrelated",
+            "after": "may_violate",
+            "effect": 1,
+            "reasons": [
+              "RELATION_VIOLATED"
+            ]
+          },
+          "sham": {
+            "status": "holds",
+            "reasons": [],
+            "before": "unrelated",
+            "after": "unrelated"
+          }
+        },
+        {
+          "a": {
+            "id": "5432dba6-516e-429c-8bcd-2be521e63632",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-4-a",
+            "phase": "final-confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "unrelated": 0.72,
+                    "cannot_tell": 0.01,
+                    "supporting": 0.01,
+                    "may_violate": 0.26,
+                    "directly_enforces": 0
+                  },
+                  "confidence": 0.65
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "violates": 0,
+                    "not_applicable": 0.92,
+                    "insufficient_evidence": 0.08,
+                    "satisfies": 0
+                  },
+                  "confidence": 0.89
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "control": {
+            "id": "cf760917-3ab3-4893-b0dc-5447104f9a8e",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-4-control",
+            "phase": "final-confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "unrelated": 0.67,
+                    "cannot_tell": 0.01,
+                    "supporting": 0.01,
+                    "may_violate": 0.31,
+                    "directly_enforces": 0
+                  },
+                  "confidence": 0.59
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "violates": 0,
+                    "not_applicable": 0.93,
+                    "insufficient_evidence": 0.07,
+                    "satisfies": 0
+                  },
+                  "confidence": 0.9
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "b": {
+            "id": "73ee9eaf-f057-46d1-91ab-47a587c8deca",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-4-b",
+            "phase": "final-confirmation",
+            "wireHash": "296c2b7ffcd0f95be2be65d77cd95dccf8c48d7264f68dc097e49f7318e43334",
+            "transportWireHash": "e9417bee472e99876d1f1fb12db882b2215197c80e4ae22920d4aed7d74a9fcd",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "may_violate",
+                  "probabilities": {
+                    "unrelated": 0.21,
+                    "may_violate": 0.74,
+                    "supporting": 0.03,
+                    "cannot_tell": 0.02,
+                    "directly_enforces": 0
+                  },
+                  "confidence": 0.67
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "violates": 0,
+                    "insufficient_evidence": 0.39,
+                    "satisfies": 0,
+                    "not_applicable": 0.61
+                  },
+                  "confidence": 0.48
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "violation": {
+            "status": "violates",
+            "signature": "[\"relation-v1\",\"relevance-object-order\",\"relevance\",\"invariant\",\"choice\",\"label\",\"unrelated\",\"may_violate\"]",
+            "before": "unrelated",
+            "after": "may_violate",
+            "effect": 1,
+            "reasons": [
+              "RELATION_VIOLATED"
+            ]
+          },
+          "sham": {
+            "status": "holds",
+            "reasons": [],
+            "before": "unrelated",
+            "after": "unrelated"
+          }
+        },
+        {
+          "a": {
+            "id": "8a03f673-e69e-4410-a9b8-15b8430bffcc",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-5-a",
+            "phase": "final-confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "unrelated": 0.71,
+                    "directly_enforces": 0,
+                    "cannot_tell": 0.01,
+                    "may_violate": 0.27,
+                    "supporting": 0.01
+                  },
+                  "confidence": 0.64
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "satisfies": 0,
+                    "insufficient_evidence": 0.07,
+                    "violates": 0,
+                    "not_applicable": 0.93
+                  },
+                  "confidence": 0.91
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "control": {
+            "id": "e88fb0cd-8572-4182-97a8-b01e3909a3d8",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-5-control",
+            "phase": "final-confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "supporting": 0.01,
+                    "cannot_tell": 0.01,
+                    "unrelated": 0.71,
+                    "directly_enforces": 0,
+                    "may_violate": 0.27
+                  },
+                  "confidence": 0.64
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "insufficient_evidence": 0.08,
+                    "satisfies": 0,
+                    "not_applicable": 0.92,
+                    "violates": 0
+                  },
+                  "confidence": 0.89
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "b": {
+            "id": "b0bf6ce5-4705-49a7-b8a5-a0d70aede283",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-5-b",
+            "phase": "final-confirmation",
+            "wireHash": "296c2b7ffcd0f95be2be65d77cd95dccf8c48d7264f68dc097e49f7318e43334",
+            "transportWireHash": "e9417bee472e99876d1f1fb12db882b2215197c80e4ae22920d4aed7d74a9fcd",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "may_violate",
+                  "probabilities": {
+                    "unrelated": 0.23,
+                    "directly_enforces": 0,
+                    "cannot_tell": 0.02,
+                    "may_violate": 0.72,
+                    "supporting": 0.03
+                  },
+                  "confidence": 0.64
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "satisfies": 0,
+                    "insufficient_evidence": 0.45,
+                    "violates": 0,
+                    "not_applicable": 0.55
+                  },
+                  "confidence": 0.4
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "violation": {
+            "status": "violates",
+            "signature": "[\"relation-v1\",\"relevance-object-order\",\"relevance\",\"invariant\",\"choice\",\"label\",\"unrelated\",\"may_violate\"]",
+            "before": "unrelated",
+            "after": "may_violate",
+            "effect": 1,
+            "reasons": [
+              "RELATION_VIOLATED"
+            ]
+          },
+          "sham": {
+            "status": "holds",
+            "reasons": [],
+            "before": "unrelated",
+            "after": "unrelated"
+          }
+        },
+        {
+          "a": {
+            "id": "922bc195-abb3-4edd-a5bc-c35042eca989",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-6-a",
+            "phase": "final-confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "unrelated": 0.66,
+                    "supporting": 0.01,
+                    "directly_enforces": 0,
+                    "cannot_tell": 0.01,
+                    "may_violate": 0.32
+                  },
+                  "confidence": 0.58
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "not_applicable": 0.89,
+                    "violates": 0,
+                    "satisfies": 0,
+                    "insufficient_evidence": 0.11
+                  },
+                  "confidence": 0.84
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "control": {
+            "id": "55adeb46-a440-4c17-b31a-1c945ec6348a",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-6-control",
+            "phase": "final-confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "directly_enforces": 0,
+                    "may_violate": 0.19,
+                    "unrelated": 0.8,
+                    "supporting": 0,
+                    "cannot_tell": 0.01
+                  },
+                  "confidence": 0.75
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "satisfies": 0,
+                    "violates": 0,
+                    "insufficient_evidence": 0.08,
+                    "not_applicable": 0.92
+                  },
+                  "confidence": 0.89
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "b": {
+            "id": "5fb31491-5ca5-439e-b083-4dd65c5f07c3",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-6-b",
+            "phase": "final-confirmation",
+            "wireHash": "296c2b7ffcd0f95be2be65d77cd95dccf8c48d7264f68dc097e49f7318e43334",
+            "transportWireHash": "e9417bee472e99876d1f1fb12db882b2215197c80e4ae22920d4aed7d74a9fcd",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "may_violate",
+                  "probabilities": {
+                    "directly_enforces": 0,
+                    "supporting": 0.04,
+                    "unrelated": 0.26,
+                    "cannot_tell": 0.02,
+                    "may_violate": 0.68
+                  },
+                  "confidence": 0.6
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "satisfies": 0,
+                    "insufficient_evidence": 0.37,
+                    "violates": 0.01,
+                    "not_applicable": 0.62
+                  },
+                  "confidence": 0.5
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "violation": {
+            "status": "violates",
+            "signature": "[\"relation-v1\",\"relevance-object-order\",\"relevance\",\"invariant\",\"choice\",\"label\",\"unrelated\",\"may_violate\"]",
+            "before": "unrelated",
+            "after": "may_violate",
+            "effect": 1,
+            "reasons": [
+              "RELATION_VIOLATED"
+            ]
+          },
+          "sham": {
+            "status": "holds",
+            "reasons": [],
+            "before": "unrelated",
+            "after": "unrelated"
+          }
+        },
+        {
+          "a": {
+            "id": "c195b178-f5db-420d-bd52-028983e75aec",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-7-a",
+            "phase": "final-confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "may_violate": 0.29,
+                    "directly_enforces": 0,
+                    "cannot_tell": 0.01,
+                    "unrelated": 0.69,
+                    "supporting": 0.01
+                  },
+                  "confidence": 0.61
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "violates": 0,
+                    "insufficient_evidence": 0.1,
+                    "not_applicable": 0.9,
+                    "satisfies": 0
+                  },
+                  "confidence": 0.85
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "control": {
+            "id": "94c3c3e5-d52c-44c7-9dfb-ea48b6a18e32",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-7-control",
+            "phase": "final-confirmation",
+            "wireHash": "fe005dbd8fc9cff1c92af15207412f632e252bd605779a39b927bea94d81a19b",
+            "transportWireHash": "ea8a8d8b310752085adb02e334cd47c66bcd6d5a5d5cb4d71e3f3530bf5e1c4c",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "unrelated",
+                  "probabilities": {
+                    "may_violate": 0.31,
+                    "directly_enforces": 0,
+                    "unrelated": 0.67,
+                    "supporting": 0.01,
+                    "cannot_tell": 0.01
+                  },
+                  "confidence": 0.6
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "violates": 0,
+                    "not_applicable": 0.89,
+                    "insufficient_evidence": 0.11,
+                    "satisfies": 0
+                  },
+                  "confidence": 0.85
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "b": {
+            "id": "a955df34-68d9-4393-bfe4-849d5e8ae0a8",
+            "operationId": "acc0fa1c-5cd7-4de4-a384-7bd4649139e2-7-b",
+            "phase": "final-confirmation",
+            "wireHash": "296c2b7ffcd0f95be2be65d77cd95dccf8c48d7264f68dc097e49f7318e43334",
+            "transportWireHash": "e9417bee472e99876d1f1fb12db882b2215197c80e4ae22920d4aed7d74a9fcd",
+            "response": {
+              "model": "jev-1.13.0",
+              "answers": {
+                "relevance": {
+                  "type": "choice",
+                  "choice": "may_violate",
+                  "probabilities": {
+                    "unrelated": 0.2,
+                    "may_violate": 0.76,
+                    "directly_enforces": 0,
+                    "supporting": 0.02,
+                    "cannot_tell": 0.02
+                  },
+                  "confidence": 0.69
+                },
+                "satisfaction": {
+                  "type": "choice",
+                  "choice": "not_applicable",
+                  "probabilities": {
+                    "not_applicable": 0.62,
+                    "insufficient_evidence": 0.37,
+                    "satisfies": 0,
+                    "violates": 0.01
+                  },
+                  "confidence": 0.5
+                }
+              },
+              "usage": {
+                "input_tokens": 945,
+                "output_tokens": 129
+              }
+            },
+            "provider": "cloudflare",
+            "observedModel": "jev-1.13.0",
+            "cache": "unknown"
+          },
+          "violation": {
+            "status": "violates",
+            "signature": "[\"relation-v1\",\"relevance-object-order\",\"relevance\",\"invariant\",\"choice\",\"label\",\"unrelated\",\"may_violate\"]",
+            "before": "unrelated",
+            "after": "may_violate",
+            "effect": 1,
+            "reasons": [
+              "RELATION_VIOLATED"
+            ]
+          },
+          "sham": {
+            "status": "holds",
+            "reasons": [],
+            "before": "unrelated",
+            "after": "unrelated"
+          }
+        }
+      ],
+      "observedModels": [
+        "jev-1.13.0"
+      ]
+    },
+    "provider": "cloudflare",
+    "reducers": {
+      "independentQuestions": false,
+      "optionalStatePaths": [],
+      "unorderedArrayPaths": [],
+      "prosePaths": []
+    },
+    "parentFindingId": "316b5d0caa25969ee27c72ec",
+    "fingerprint": "f0316e87474a6909b874000222704c25722b690b45c1aa387341b896a72345c8",
+    "replayability": "full"
+  },
+  "status": "reduced",
+  "attempted": 2,
+  "accepted": 1,
+  "originalComplexity": [
+    1,
+    3,
+    0,
+    4698,
+    64
+  ],
+  "finalComplexity": [
+    1,
+    2,
+    0,
+    4698,
+    64
+  ],
+  "history": [
+    {
+      "candidateId": "9293580c0998f454a1ece414",
+      "accepted": false,
+      "reason": "screen-rejected",
+      "complexity": [
+        1,
+        2,
+        0,
+        4698,
+        64
+      ]
+    },
+    {
+      "candidateId": "b09ddffb04dc429ae7f8cebc",
+      "accepted": true,
+      "reason": "restore-object-order:0:0:1",
+      "complexity": [
+        1,
+        2,
+        0,
+        4698,
+        64
+      ]
+    }
+  ]
+}

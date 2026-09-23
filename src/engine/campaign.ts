@@ -117,7 +117,7 @@ async function executeCampaign(input: CampaignConfig, provider: DecisionProvider
     seed: config.search.seed, inputHashes: config.seeds.map(seed => wireHash(JSON.stringify(seed.request))), contractHashes: config.contracts.map(contract => contractHash([contract])), targetHashes: config.seeds.map(seed => targetHash(seed.request, config.policy, config.provider)), cohort: 'unobserved', estimatedCost: null,
     budget: ledger.snapshot(), slots: slots.snapshot(), summary: { cases: planned.cases, questions: planned.questions, contracts: planned.contracts, candidates: candidates.length, evaluated: 0, pending: 0, invalid: planned.invalid, noops: planned.noops, limited: planned.limited, duplicateSeeds: config.duplicateSeeds, fail: 0, inconclusive: 0, requiredUnevaluated: 0 },
     results, findings, coverageProxy: { name: 'typed decisions', version: 'typed-v1', observed: 0, stable: 0 }, usage: broker.usage, persistenceMode: persist ? config.storage.mode : 'memory', replayable: config.storage.mode === 'full',
-    warnings: ['Coverage is an external behavioral proxy, not model-internal coverage.', 'PASS means no detected violation in executed observations, not factual correctness.', ...(config.search.strategy === 'feedback' ? ['Feedback search is experimental until benchmark promotion criteria pass.'] : []), ...(config.storage.mode !== 'full' ? ['Payloads and fresh confirmation evidence are unavailable for replay/resume in this persistence mode.'] : [])], ...(directory ? { directory } : {}) };
+    warnings: ['Coverage is an external behavioral proxy, not model-internal coverage.', 'PASS means no detected violation in executed observations, not factual correctness.', ...(config.search.strategy === 'feedback' ? ['Feedback search passed the v4 offline benchmark criteria; efficiency on this target is unverified.'] : []), ...(config.storage.mode !== 'full' ? ['Payloads and fresh confirmation evidence are unavailable for replay/resume in this persistence mode.'] : [])], ...(directory ? { directory } : {}) };
   try {
     await journalSink?.append('campaign-start', { id, timestamp: report.timestamp, config, configHash, components: COMPONENT_VERSIONS, lineageBudgetId: ledger.lineageBudgetId, ...(recovered ? { inherited: recovered } : {}) });
     const checkpoint = (): CampaignCheckpoint => ({ version: 2, kind: 'checkpoint', runId: id, config, configHash, componentVersions: COMPONENT_VERSIONS, budget: ledger.snapshot(), slots: slots.snapshot(), scheduler: scheduler.snapshot(), results, findings, observedModels: broker.observedModels, journalHead: journal!.headHash, journalFile: join(directory!, 'events.jsonl'), timestamp: new Date().toISOString() });
@@ -151,7 +151,7 @@ async function executeCampaign(input: CampaignConfig, provider: DecisionProvider
       });
       await Promise.allSettled(workers);
       const commits: { candidateId: string; feedback: Feedback; confirmed: boolean }[] = [];
-      for (const candidate of [...batch].sort((a, b) => a.id.localeCompare(b.id))) {
+      for (const candidate of batch) {
         const pair = observations.get(candidate.id); if (!pair) continue;
         const contracts = config.contracts.filter(contract => candidate.contractIds.includes(contract.id));
         const relations = contracts.map(contract => ({ contractId: contract.id, discovery: evaluateRelation(candidate, contract, pair.a.response, pair.b.response, config.policy), pending: false } as CandidateResult['relations'][number]));

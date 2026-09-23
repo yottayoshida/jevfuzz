@@ -1,0 +1,1103 @@
+{
+  "trials": [
+    {
+      "fixture": "known-minimum-0",
+      "status": "reduced",
+      "passed": true,
+      "initial": [
+        3,
+        0,
+        0,
+        727,
+        39
+      ],
+      "final": [
+        1,
+        0,
+        0,
+        316,
+        19
+      ],
+      "accepted": 4,
+      "history": [
+        {
+          "candidateId": "e7a003a7babaee57bc563672",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            2,
+            0,
+            0,
+            708,
+            38
+          ]
+        },
+        {
+          "candidateId": "520855c9fbb964388fbeb4a2",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            1,
+            0,
+            0,
+            689,
+            37
+          ]
+        },
+        {
+          "candidateId": "dd29cde595278bc1d073802b",
+          "accepted": true,
+          "reason": "remove-question:independent_0",
+          "complexity": [
+            1,
+            0,
+            0,
+            451,
+            25
+          ]
+        },
+        {
+          "candidateId": "a6233cb06428f8319f504574",
+          "accepted": true,
+          "reason": "remove-optional:$.state.optional",
+          "complexity": [
+            1,
+            0,
+            0,
+            316,
+            19
+          ]
+        }
+      ],
+      "expected": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24
+      },
+      "actual": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24,
+        "uniqueFinalObservationIds": 24,
+        "allFinalFresh": true,
+        "acceptedComplexitiesMonotonic": true
+      }
+    },
+    {
+      "fixture": "known-minimum-1",
+      "status": "reduced",
+      "passed": true,
+      "initial": [
+        3,
+        0,
+        0,
+        975,
+        51
+      ],
+      "final": [
+        1,
+        0,
+        0,
+        316,
+        19
+      ],
+      "accepted": 5,
+      "history": [
+        {
+          "candidateId": "f42d6427f306032f4e305cc0",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            2,
+            0,
+            0,
+            956,
+            50
+          ]
+        },
+        {
+          "candidateId": "96e6b735b2b88f756c031daf",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            1,
+            0,
+            0,
+            937,
+            49
+          ]
+        },
+        {
+          "candidateId": "170a7192c6c81855777f0bd7",
+          "accepted": true,
+          "reason": "remove-question:independent_0",
+          "complexity": [
+            1,
+            0,
+            0,
+            699,
+            37
+          ]
+        },
+        {
+          "candidateId": "70fc4255dd5f86d3a86015b2",
+          "accepted": true,
+          "reason": "remove-question:independent_1",
+          "complexity": [
+            1,
+            0,
+            0,
+            461,
+            25
+          ]
+        },
+        {
+          "candidateId": "b339b5419c8320276435beb8",
+          "accepted": true,
+          "reason": "remove-optional:$.state.optional",
+          "complexity": [
+            1,
+            0,
+            0,
+            316,
+            19
+          ]
+        }
+      ],
+      "expected": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24
+      },
+      "actual": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24,
+        "uniqueFinalObservationIds": 24,
+        "allFinalFresh": true,
+        "acceptedComplexitiesMonotonic": true
+      }
+    },
+    {
+      "fixture": "known-minimum-2",
+      "status": "reduced",
+      "passed": true,
+      "initial": [
+        3,
+        0,
+        0,
+        1223,
+        63
+      ],
+      "final": [
+        1,
+        0,
+        0,
+        316,
+        19
+      ],
+      "accepted": 6,
+      "history": [
+        {
+          "candidateId": "8d238121259513d739cc169a",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            2,
+            0,
+            0,
+            1204,
+            62
+          ]
+        },
+        {
+          "candidateId": "e5ef794c27bde11c9e2db9d1",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            1,
+            0,
+            0,
+            1185,
+            61
+          ]
+        },
+        {
+          "candidateId": "40e1a2e693f82247fb8798b0",
+          "accepted": true,
+          "reason": "remove-question:independent_0",
+          "complexity": [
+            1,
+            0,
+            0,
+            947,
+            49
+          ]
+        },
+        {
+          "candidateId": "5ce6aa1da4e6371c47bb327c",
+          "accepted": true,
+          "reason": "remove-question:independent_1",
+          "complexity": [
+            1,
+            0,
+            0,
+            709,
+            37
+          ]
+        },
+        {
+          "candidateId": "7f2bfa67f7a00481e85d475e",
+          "accepted": true,
+          "reason": "remove-question:independent_2",
+          "complexity": [
+            1,
+            0,
+            0,
+            471,
+            25
+          ]
+        },
+        {
+          "candidateId": "555d77860f477213466df8ed",
+          "accepted": true,
+          "reason": "remove-optional:$.state.optional",
+          "complexity": [
+            1,
+            0,
+            0,
+            316,
+            19
+          ]
+        }
+      ],
+      "expected": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24
+      },
+      "actual": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24,
+        "uniqueFinalObservationIds": 24,
+        "allFinalFresh": true,
+        "acceptedComplexitiesMonotonic": true
+      }
+    },
+    {
+      "fixture": "known-minimum-3",
+      "status": "reduced",
+      "passed": true,
+      "initial": [
+        3,
+        0,
+        0,
+        757,
+        39
+      ],
+      "final": [
+        1,
+        0,
+        0,
+        316,
+        19
+      ],
+      "accepted": 4,
+      "history": [
+        {
+          "candidateId": "9ff7eaa9830acaa2ae31d439",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            2,
+            0,
+            0,
+            738,
+            38
+          ]
+        },
+        {
+          "candidateId": "b0577bfe26b4d160c32d5d61",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            1,
+            0,
+            0,
+            719,
+            37
+          ]
+        },
+        {
+          "candidateId": "a3949e7c0502e05e9bf9028a",
+          "accepted": true,
+          "reason": "remove-question:independent_0",
+          "complexity": [
+            1,
+            0,
+            0,
+            481,
+            25
+          ]
+        },
+        {
+          "candidateId": "dbcbf07a9293cb1a7ad59664",
+          "accepted": true,
+          "reason": "remove-optional:$.state.optional",
+          "complexity": [
+            1,
+            0,
+            0,
+            316,
+            19
+          ]
+        }
+      ],
+      "expected": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24
+      },
+      "actual": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24,
+        "uniqueFinalObservationIds": 24,
+        "allFinalFresh": true,
+        "acceptedComplexitiesMonotonic": true
+      }
+    },
+    {
+      "fixture": "known-minimum-4",
+      "status": "reduced",
+      "passed": true,
+      "initial": [
+        3,
+        0,
+        0,
+        973,
+        51
+      ],
+      "final": [
+        1,
+        0,
+        0,
+        316,
+        19
+      ],
+      "accepted": 5,
+      "history": [
+        {
+          "candidateId": "d63ecbaacfea37422436e6c3",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            2,
+            0,
+            0,
+            954,
+            50
+          ]
+        },
+        {
+          "candidateId": "e240ef0456f9b545debbcb1e",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            1,
+            0,
+            0,
+            935,
+            49
+          ]
+        },
+        {
+          "candidateId": "9de3d1b769edfd322ce10e69",
+          "accepted": true,
+          "reason": "remove-question:independent_0",
+          "complexity": [
+            1,
+            0,
+            0,
+            697,
+            37
+          ]
+        },
+        {
+          "candidateId": "69381f9fdb3806ede1d7d1fe",
+          "accepted": true,
+          "reason": "remove-question:independent_1",
+          "complexity": [
+            1,
+            0,
+            0,
+            459,
+            25
+          ]
+        },
+        {
+          "candidateId": "6faa9fbe67ffb83b4e2efc3d",
+          "accepted": true,
+          "reason": "remove-optional:$.state.optional",
+          "complexity": [
+            1,
+            0,
+            0,
+            316,
+            19
+          ]
+        }
+      ],
+      "expected": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24
+      },
+      "actual": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24,
+        "uniqueFinalObservationIds": 24,
+        "allFinalFresh": true,
+        "acceptedComplexitiesMonotonic": true
+      }
+    },
+    {
+      "fixture": "known-minimum-5",
+      "status": "reduced",
+      "passed": true,
+      "initial": [
+        3,
+        0,
+        0,
+        1221,
+        63
+      ],
+      "final": [
+        1,
+        0,
+        0,
+        316,
+        19
+      ],
+      "accepted": 6,
+      "history": [
+        {
+          "candidateId": "79ecda3ac99c1aa30f203b6f",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            2,
+            0,
+            0,
+            1202,
+            62
+          ]
+        },
+        {
+          "candidateId": "5df9566b7f3ff5909105eaf9",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            1,
+            0,
+            0,
+            1183,
+            61
+          ]
+        },
+        {
+          "candidateId": "f292cbabc6f256a460f512ff",
+          "accepted": true,
+          "reason": "remove-question:independent_0",
+          "complexity": [
+            1,
+            0,
+            0,
+            945,
+            49
+          ]
+        },
+        {
+          "candidateId": "2f3c825b1511c48229d999c5",
+          "accepted": true,
+          "reason": "remove-question:independent_1",
+          "complexity": [
+            1,
+            0,
+            0,
+            707,
+            37
+          ]
+        },
+        {
+          "candidateId": "d51c66c6dda80587f9a60286",
+          "accepted": true,
+          "reason": "remove-question:independent_2",
+          "complexity": [
+            1,
+            0,
+            0,
+            469,
+            25
+          ]
+        },
+        {
+          "candidateId": "3641077f69ea8b8540db66ea",
+          "accepted": true,
+          "reason": "remove-optional:$.state.optional",
+          "complexity": [
+            1,
+            0,
+            0,
+            316,
+            19
+          ]
+        }
+      ],
+      "expected": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24
+      },
+      "actual": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24,
+        "uniqueFinalObservationIds": 24,
+        "allFinalFresh": true,
+        "acceptedComplexitiesMonotonic": true
+      }
+    },
+    {
+      "fixture": "known-minimum-6",
+      "status": "reduced",
+      "passed": true,
+      "initial": [
+        3,
+        0,
+        0,
+        755,
+        39
+      ],
+      "final": [
+        1,
+        0,
+        0,
+        316,
+        19
+      ],
+      "accepted": 4,
+      "history": [
+        {
+          "candidateId": "dd8354b89eed476c54d0f3b2",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            2,
+            0,
+            0,
+            736,
+            38
+          ]
+        },
+        {
+          "candidateId": "8fc1000dfeffd4e1e5079da4",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            1,
+            0,
+            0,
+            717,
+            37
+          ]
+        },
+        {
+          "candidateId": "b8c3518727374d2c71a3dba6",
+          "accepted": true,
+          "reason": "remove-question:independent_0",
+          "complexity": [
+            1,
+            0,
+            0,
+            479,
+            25
+          ]
+        },
+        {
+          "candidateId": "14502c16aa92f2060966c35f",
+          "accepted": true,
+          "reason": "remove-optional:$.state.optional",
+          "complexity": [
+            1,
+            0,
+            0,
+            316,
+            19
+          ]
+        }
+      ],
+      "expected": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24
+      },
+      "actual": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24,
+        "uniqueFinalObservationIds": 24,
+        "allFinalFresh": true,
+        "acceptedComplexitiesMonotonic": true
+      }
+    },
+    {
+      "fixture": "known-minimum-7",
+      "status": "reduced",
+      "passed": true,
+      "initial": [
+        3,
+        0,
+        0,
+        1003,
+        51
+      ],
+      "final": [
+        1,
+        0,
+        0,
+        316,
+        19
+      ],
+      "accepted": 5,
+      "history": [
+        {
+          "candidateId": "4d2d31ca237187b1baeb2d23",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            2,
+            0,
+            0,
+            984,
+            50
+          ]
+        },
+        {
+          "candidateId": "dba7d2653e005389d78a9a88",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            1,
+            0,
+            0,
+            965,
+            49
+          ]
+        },
+        {
+          "candidateId": "bf620d801b82590172880776",
+          "accepted": true,
+          "reason": "remove-question:independent_0",
+          "complexity": [
+            1,
+            0,
+            0,
+            727,
+            37
+          ]
+        },
+        {
+          "candidateId": "9bed7e37e32aa027efee26e2",
+          "accepted": true,
+          "reason": "remove-question:independent_1",
+          "complexity": [
+            1,
+            0,
+            0,
+            489,
+            25
+          ]
+        },
+        {
+          "candidateId": "4aac3b80464bc3ee65708092",
+          "accepted": true,
+          "reason": "remove-optional:$.state.optional",
+          "complexity": [
+            1,
+            0,
+            0,
+            316,
+            19
+          ]
+        }
+      ],
+      "expected": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24
+      },
+      "actual": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24,
+        "uniqueFinalObservationIds": 24,
+        "allFinalFresh": true,
+        "acceptedComplexitiesMonotonic": true
+      }
+    },
+    {
+      "fixture": "known-minimum-8",
+      "status": "reduced",
+      "passed": true,
+      "initial": [
+        3,
+        0,
+        0,
+        1219,
+        63
+      ],
+      "final": [
+        1,
+        0,
+        0,
+        316,
+        19
+      ],
+      "accepted": 6,
+      "history": [
+        {
+          "candidateId": "cac9fa48bda779a37aec5191",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            2,
+            0,
+            0,
+            1200,
+            62
+          ]
+        },
+        {
+          "candidateId": "1974d193ca26e901f9b75791",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            1,
+            0,
+            0,
+            1181,
+            61
+          ]
+        },
+        {
+          "candidateId": "49923a571532c8ba68771f28",
+          "accepted": true,
+          "reason": "remove-question:independent_0",
+          "complexity": [
+            1,
+            0,
+            0,
+            943,
+            49
+          ]
+        },
+        {
+          "candidateId": "a24b0ef4ce0d6799db290069",
+          "accepted": true,
+          "reason": "remove-question:independent_1",
+          "complexity": [
+            1,
+            0,
+            0,
+            705,
+            37
+          ]
+        },
+        {
+          "candidateId": "b207567033de6f3eb4e0e9fd",
+          "accepted": true,
+          "reason": "remove-question:independent_2",
+          "complexity": [
+            1,
+            0,
+            0,
+            467,
+            25
+          ]
+        },
+        {
+          "candidateId": "fd97b09b09ae5500c8eabf70",
+          "accepted": true,
+          "reason": "remove-optional:$.state.optional",
+          "complexity": [
+            1,
+            0,
+            0,
+            316,
+            19
+          ]
+        }
+      ],
+      "expected": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24
+      },
+      "actual": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24,
+        "uniqueFinalObservationIds": 24,
+        "allFinalFresh": true,
+        "acceptedComplexitiesMonotonic": true
+      }
+    },
+    {
+      "fixture": "known-minimum-9",
+      "status": "reduced",
+      "passed": true,
+      "initial": [
+        3,
+        0,
+        0,
+        753,
+        39
+      ],
+      "final": [
+        1,
+        0,
+        0,
+        316,
+        19
+      ],
+      "accepted": 4,
+      "history": [
+        {
+          "candidateId": "3b78abab8cc97909edfdf3ba",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            2,
+            0,
+            0,
+            734,
+            38
+          ]
+        },
+        {
+          "candidateId": "909351fb46a86e0e6d9e7457",
+          "accepted": true,
+          "reason": "remove-operator:0",
+          "complexity": [
+            1,
+            0,
+            0,
+            715,
+            37
+          ]
+        },
+        {
+          "candidateId": "666001184cdc46161b02ad3b",
+          "accepted": true,
+          "reason": "remove-question:independent_0",
+          "complexity": [
+            1,
+            0,
+            0,
+            477,
+            25
+          ]
+        },
+        {
+          "candidateId": "81f1fca996e089db0403e3ab",
+          "accepted": true,
+          "reason": "remove-optional:$.state.optional",
+          "complexity": [
+            1,
+            0,
+            0,
+            316,
+            19
+          ]
+        }
+      ],
+      "expected": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24
+      },
+      "actual": {
+        "recipe": [
+          "diagnostic_c"
+        ],
+        "questions": [
+          "route"
+        ],
+        "baseState": {},
+        "mutantState": {
+          "diagnostic_c": "c"
+        },
+        "finalObservations": 24,
+        "uniqueFinalObservationIds": 24,
+        "allFinalFresh": true,
+        "acceptedComplexitiesMonotonic": true
+      }
+    }
+  ],
+  "passed": true
+}

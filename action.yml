@@ -1,0 +1,51 @@
+name: JevFuzz
+description: Find and confirm Jev decision contract violations in your repository.
+inputs:
+  command:
+    description: plan, fuzz, or check
+    required: false
+    default: plan
+  target:
+    description: Workspace-relative campaign JSON file or corpus directory
+    required: true
+  provider:
+    description: Optional typesafe or cloudflare provider override
+    required: false
+  storage:
+    description: hash-only or full private fuzz evidence
+    default: hash-only
+    required: false
+outputs:
+  exit-code:
+    description: JevFuzz exit status (0 pass, 1 violation, 2 error, 3 inconclusive)
+    value: ${{ steps.run.outputs.exit-code }}
+  report-path:
+    description: Temporary JSON report path, when a report was produced
+    value: ${{ steps.run.outputs.report-path }}
+  artifacts-path:
+    description: Private temporary artifact directory, also available on failure
+    value: ${{ steps.run.outputs.artifacts-path }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      with:
+        node-version: '24'
+    - name: Build JevFuzz from locked action source
+      shell: bash
+      run: env -u NODE_OPTIONS -u NODE_PATH node "$GITHUB_ACTION_PATH/scripts/action/build.mjs"
+    - id: run
+      name: Run JevFuzz
+      shell: bash
+      env:
+        INPUT_COMMAND: ${{ inputs.command }}
+        INPUT_TARGET: ${{ inputs.target }}
+        INPUT_PROVIDER: ${{ inputs.provider }}
+        INPUT_STORAGE: ${{ inputs.storage }}
+      run: env -u NODE_OPTIONS -u NODE_PATH node "$GITHUB_ACTION_PATH/scripts/action/run.mjs" --stage
+    - name: Enforce JevFuzz result
+      if: always()
+      shell: bash
+      env:
+        JEVFUZZ_STATUS_PATH: ${{ steps.run.outputs.status-path }}
+      run: env -u NODE_OPTIONS -u NODE_PATH node "$GITHUB_ACTION_PATH/scripts/action/finalize.mjs"
