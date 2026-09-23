@@ -126,7 +126,7 @@ false completion after quota failure, retry budget errors mislabeled as storage
 errors, and omitted declared prose whitespace reductions. The independent
 reviews are local evidence, not GitHub reviews.
 
-## Outstanding acceptance
+## Field acceptance still outstanding
 
 - M03 usability observation and M09-05: three real workload families, two
   external users, two real counterexample → fix → regression loops. Bundled
@@ -135,17 +135,31 @@ reviews are local evidence, not GitHub reviews.
   environment has no supplied credential configuration. TypeSafe and Cloudflare
   adapter tests are deterministic offline tests; live cache freshness remains
   unknown and fixed-stat is refused for those adapters.
-- M04-07/M09-06: benchmark acceptance is determined by the complete corrected
-  frozen protocol and its raw results, not by test-suite success. See
-  `benchmark-v09.md`; superseded measurements cannot support promotion.
-- No v0.9 push, merge, release, npm publication, deployment, or contact with
+## Local benchmark evidence
+
+M04-07/M09-06 local simulator acceptance passed: 6,000 trials (12 families ×
+5 strategies × 100 seeds), 1,000 fixed-stat null campaigns with zero false FAILs
+(one-sided 95% upper bound 0.002992), ten known-minimum shrink cases, and 50
+seeds with concurrency 1/4/8. Of the adaptive null attempts, 676 campaigns
+reached a fresh final confirmation; unused reserved slots are not counted as
+executed tests. Power/stress adds 2,200 trials across 22 conditions with explicit
+noise/correlation and simulation limits. No live accuracy or FWER claim follows.
+
+The aggregate median estimator was corrected after measurement to include
+censoring. Original measurement code and summaries are retained, and corrected
+analysis binds their hashes. This historical run cannot promote feedback;
+no family met the 25% threshold in the corrected comparison anyway. Uniform
+remains the default. `benchmark-v09.md` records commands and limitations.
+## Publication
+
+No v0.9 push, merge, release, npm publication, deployment, or contact with
   external users has been performed. These external operations need explicit
   operation-and-target authorization.
 
 ## Verification tooling limitation
 
 The local risk classifier returned high-risk for sensitive data, recovery, and
-change size. The optional diff-receipt helper
+change size. The diff-receipt helper
 `python3 ~/.codex/hooks/quality_guard.py receipt --repo . ...` returned
 `QUALITY_INTERNAL_ERROR` (exit 2). No successful receipt or unobservable
 per-agent sandbox attestation is claimed; the executed commands above and their
