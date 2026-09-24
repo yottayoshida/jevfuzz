@@ -19,7 +19,7 @@ The [provider record](provider-conformance.md#dual-provider-readiness-verificati
 documents the installed CLI verification of both provider paths and the
 additional Cloudflare live smoke.
 
-## Current unmerged local verification — 2026-09-24
+## Earlier unmerged local verification — 2026-09-24
 
 The `codex/json-validation-v09` branch closes three further boundary gaps:
 v1 `run`/`replay` now reject known credentials before provider dispatch, v1
@@ -36,14 +36,38 @@ and `node scripts/demo-v09.ts` passed. The local synthetic demo used 27 logical
 calls and zero HTTP attempts. A fresh temporary source copy passed
 `scripts/verify-package.ts` with the installed bin for both adapters: 13 CLI
 commands and 44 intercepted fake HTTP calls per provider, with zero runtime
-dependencies. The package version remains `0.2.0`; none of these results is a
-current-head CI run, live API run, published package, or v0.9 release.
+dependencies. The package version remains `0.2.0`; these 235-test results
+predate later PR #9 changes and are not a live API run, published package, or
+v0.9 release.
 
 The focused regression tests failed before each correction and passed after it.
 The reviewer route was requested as `gpt-5.6-terra/high`, but actual runtime
 model and effort could not be attested, so no independent-review pass is claimed.
 The optional quality receipt returned `QUALITY_INTERNAL_ERROR` (exit 2).
 Mandatory field acceptance and live origin-independence evidence remain open.
+
+## PR #9 follow-up evidence — 2026-09-24
+
+At commit `288b992fbf52beec03eb88d9253ce53fdfd5b2fc`, GitHub Actions
+[run 35950588488](https://github.com/yottayoshida/jevfuzz/actions/runs/35950588488)
+passed `windows-artifacts`, `test (22.18.0)`, `test (24)`, and `action`.
+The relevant Linux steps were `Run npm test` and
+`Run node scripts/verify-package.ts`; the Action assertion was
+`Assert composite outcomes and preserved reports`. This CI predates the
+subsequent package-version change and does not validate that later diff.
+
+Legacy `plan`/`run` now reject mixed requested models before provider calls.
+Windows path-component checks cover both legacy and v2 artifact storage;
+legacy run directories use exclusive creation and publish `manifest.json`
+last. Package version metadata is sourced from `package.json`, with source
+and installed-package assertions for CLI help and v1 report metadata.
+On POSIX, the legacy artifact writer checks directory ownership and unsafe
+ancestor writes.
+On Windows, caller-supplied storage still requires an ACL-private parent;
+the process does not inspect ACLs. Same-user concurrent path replacement
+is outside the storage threat model. These constraints do not change the
+unmet TypeSafe-direct, origin-independent statistical, or field-acceptance
+criteria.
 
 ## Slices and acceptance properties
 
@@ -70,8 +94,9 @@ Mandatory field acceptance and live origin-independence evidence remain open.
    and an honest field-validation ledger.
 
 The implementation is divided into the boundaries above, with focused tests
-and local independent reviews. No GitHub review or current-head CI result is
-claimed. Source schemas and the standalone generated validators are one
+and local independent reviews. No GitHub independent review is claimed;
+current-head CI must be read from the PR checks rather than the historical
+results above. Source schemas and the standalone generated validators are one
 contract-parity unit; broker, journal, and recovery preserve one budget lineage.
 
 ## Boundary contract

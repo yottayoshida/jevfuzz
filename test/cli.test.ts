@@ -6,6 +6,17 @@ import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { main } from '../src/cli/main.ts';
 import { FakeProvider } from '../src/provider.ts';
+import { TOOL_VERSION } from '../src/version.ts';
+
+test('CLI help and run report use the package release version', async () => {
+  const release = JSON.parse(await readFile('package.json', 'utf8')) as { version: string };
+  assert.equal(TOOL_VERSION, release.version);
+  let help = '';
+  assert.equal(await main(['--help'], { stdout: value => { help += value; }, stderr: () => {}, env: {} }), 0);
+  assert.ok(help.startsWith(`JevFuzz ${release.version} —`));
+  const report = await (await import('../src/runner.ts')).run(await (await import('../src/config.ts')).loadConfig('fixtures/live-smoke.jevfuzz.json'), new FakeProvider(), { seed: 42 });
+  assert.equal(report.run.jevfuzzVersion, release.version);
+});
 
 test('CLI plan and doctor perform zero fetch calls and never print a key', async () => {
   let calls = 0, stdout = '', stderr = '';

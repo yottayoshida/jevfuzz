@@ -151,11 +151,20 @@ and independently replayable `failures/F001.json` files. JSON report version 1 i
 the public contract. It records versions, seed, hashes, requested/observed models,
 thresholds, baseline/mutation/confirmation answers, usage, and request counts.
 
-Artifacts stay local. New directories use 0700, files 0600 where supported, and
-symlinks/overwrites are refused. **Full artifacts may contain private source and
-prompts.** File permissions do not prevent the same user from committing them;
-keep `.jevfuzz/` ignored. On Windows, ACLs govern access and Node cannot fsync
-directory entries, though file contents are synced before publication.
+Artifacts stay local. Caller-controlled symlink components are rejected (the
+fixed macOS `/var` system alias is allowed), run directories are reserved with
+exclusive `mkdir`, and files use exclusive create. On POSIX, new directories
+use 0700 and files 0600. Existing ancestors must be owned by the caller or
+root; group/world-writable ancestors without the sticky bit are rejected.
+These checks do not inspect POSIX ACLs and assume
+another process with the same user ID cannot replace a checked path during a
+run. **Full artifacts may contain private source and prompts.** File permissions
+do not prevent the same user from committing them; keep `.jevfuzz/` ignored.
+On Windows, place `--artifacts-dir` or v2 `storage.directory` in an ACL-private
+directory controlled by the caller. Node does not validate those ACLs here or
+fsync directory entries;
+file contents are synced before publication. Do not use a shared writable
+directory for sensitive artifacts.
 `--no-save-payloads` persists hashes and summaries only,
 and disables replay. A runtime error or cancellation saves a partial report with
 `run.status: "incomplete"` and `manifest.complete: false`, then exits 2. Validated
