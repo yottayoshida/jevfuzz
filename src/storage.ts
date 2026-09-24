@@ -182,7 +182,8 @@ export async function privateDir(path: string): Promise<string> {
   await assertSafePath(safe);
   const stat = await lstat(safe);
   assert(stat.isDirectory() && (!process.getuid || stat.uid === process.getuid()), 'storage directory must be owned by the current user');
-  assert((stat.mode & 0o077) === 0, 'storage directory must have mode 0700');
+  // Windows reports synthesized POSIX mode bits; ACLs govern access there.
+  if (process.platform !== 'win32') assert((stat.mode & 0o077) === 0, 'storage directory must have mode 0700');
   return safe;
 }
 export async function syncDirectory(path: string): Promise<void> {
