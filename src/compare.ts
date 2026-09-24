@@ -165,9 +165,9 @@ export function compare(baselineAnswers: JevAnswer[], mutatedAnswers: JevAnswer[
     if (reproduced) {
       return { ...base, verdict: 'FAIL', reason: reproduced.failure.reason, warnings: [], reproduced: reproduced.matches, delta: reproduced.failure.delta };
     }
-    if (firstFailure) {
-      const matches = counts.get(firstFailure.signature)!.matches;
-      return { ...base, verdict: 'WARN', reason: 'WARN_FLAKY_MUTATION', warnings: ['WARN_FLAKY_MUTATION'], reproduced: matches, delta: firstFailure.delta };
+    const flaky = [...counts.values()].sort((a, b) => b.matches - a.matches || a.failure.signature.localeCompare(b.failure.signature))[0];
+    if (flaky) {
+      return { ...base, verdict: 'WARN', reason: 'WARN_FLAKY_MUTATION', warnings: ['WARN_FLAKY_MUTATION'], reproduced: flaky.matches, delta: flaky.failure.delta };
     }
   }
   const soft = softResult(baseline, mutated, limits);

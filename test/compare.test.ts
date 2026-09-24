@@ -113,6 +113,11 @@ test('confirmed comparisons recognize a later consistent failure signature and k
   assert.equal(flakyFirst.verdict, 'WARN');
   assert.equal(flakyFirst.reason, 'WARN_FLAKY_MUTATION');
   assert.equal(flakyFirst.reproduced, 1);
+
+  const lateSingleFailure = compare(baseline, [choice('yes'), choice('no'), choice('yes')], undefined, true);
+  assert.equal(lateSingleFailure.verdict, 'WARN');
+  assert.equal(lateSingleFailure.reason, 'WARN_FLAKY_MUTATION');
+  assert.equal(lateSingleFailure.reproduced, 1);
 });
 
 test('choice and score distribution/confidence soft invariants use base-two JS divergence', () => {

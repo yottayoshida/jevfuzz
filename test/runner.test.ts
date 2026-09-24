@@ -41,6 +41,23 @@ test('position sensitivity becomes confirmed FAIL with byte-identical confirmati
   }
   assert.equal(result.summary.usage.inputTokens, result.summary.logicalRequests * 10);
 });
+test('late confirmation failure on another question is reported as flaky instead of PASS', async () => {
+  const c = config();
+  const mutation = criterionOrderMutation(c, ['b', 'a', 'c']);
+  let calls = 0;
+  const provider = new FakeProvider(request => {
+    calls++;
+    const response = answer(request, calls <= 3 ? 'a' : 'b');
+    response.answers.n = { type: 'noul', noul: calls === 5 ? 0.4 : 0.6 };
+    return response;
+  });
+  const report = await run(c, provider, { seed: 42, concurrency: 1 }, [[mutation]]);
+  const comparison = report.cases[0]!.mutations[0]!.comparisons.n!;
+  assert.equal(calls, 6);
+  assert.equal(comparison.verdict, 'WARN');
+  assert.equal(comparison.reason, 'WARN_FLAKY_MUTATION');
+  assert.equal(comparison.reproduced, 1);
+});
 test('unstable baseline cannot fail while independent stable questions can pass', async () => {
   const result = await run(config(), new FakeProvider((r, i) => answer(r, i % 2 ? 'b' : 'a')), { seed: 3 });
   assert.equal(result.summary.fail, 0); assert.ok(result.summary.inconclusive > 0);
