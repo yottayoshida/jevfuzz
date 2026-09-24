@@ -17,7 +17,9 @@ async function fixture(t: { after: (fn: () => Promise<void>) => void }) {
   const workspace = join(dir, 'consumer'), tempRoot = join(dir, 'temp');
   await mkdir(workspace); await mkdir(tempRoot);
   const output = join(dir, 'output'); await writeFile(output, '');
-  return { dir, workspace, tempRoot, output, deps: { workspace, tempRoot, actionPath: repo, timeoutMs: 5000, killGraceMs: 50 } };
+  // The full cross-version suite can contend for CPU; timeout behavior has its
+  // own 150 ms test below, so functional cases get a non-contentious deadline.
+  return { dir, workspace, tempRoot, output, deps: { workspace, tempRoot, actionPath: repo, timeoutMs: 15000, killGraceMs: 50 } };
 }
 async function campaign(dir: string, provider = 'cloudflare', pending = false) {
   const config = JSON.parse(await readFile(join(repo, 'examples/github-actions/campaign.json'), 'utf8'));
