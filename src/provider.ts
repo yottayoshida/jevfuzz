@@ -3,6 +3,7 @@ import type { DecisionProvider, EvaluateOptions, JevAnswer, JevRequest, JevRespo
 import { FuzzError, record, rng } from './util.ts';
 import { validateRequest } from './config.ts';
 import { canonicalJson, hasSecrets, parseBoundedJson } from './storage.ts';
+import { finiteUnit, probabilities } from './answer-validation.ts';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 const DEFAULT_TYPESAFE_HOST = 'https://api.typesafe.ai';
@@ -39,27 +40,6 @@ function responseError(): FuzzError {
 
 function missingModelError(): FuzzError {
   return providerError('PROVIDER_RESPONSE', 'provider response is missing the actual model version');
-}
-
-function finiteUnit(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
-}
-
-function probabilities(value: unknown, expectedKeys?: readonly string[]): Record<string, number> | null {
-  if (!record(value)) return null;
-  const keys = Object.keys(value);
-  if (expectedKeys && (keys.length !== expectedKeys.length || expectedKeys.some((key) => !Object.hasOwn(value, key)))) return null;
-  let total = 0;
-  for (const entry of Object.values(value)) {
-    if (!finiteUnit(entry)) return null;
-    total += entry;
-  }
-  // Live Jev 1.13.0 returns probabilities rounded to two decimal places.
-  // Their sum can be 0.99 or 1.01. Accept only the implied rounding interval;
-  // retain every raw value rather than rewriting the provider's distribution.
-  const rounded = Object.values(value).every(entry => Math.abs((entry as number) * 100 - Math.round((entry as number) * 100)) < 1e-9);
-  const tolerance = rounded ? keys.length * 0.005 + 1e-9 : 0.000_001;
-  return total > 0 && Math.abs(total - 1) <= tolerance ? value as Record<string, number> : null;
 }
 
 function validAnswer(value: unknown, question: JevRequest['questions'][string]): value is JevAnswer {

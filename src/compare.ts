@@ -2,22 +2,23 @@ import { thresholds } from './config.ts';
 import type { BaselineStats, Comparison, Invariant, JevAnswer, Thresholds } from './types.ts';
 import { FuzzError } from './util.ts';
 import { canonicalJson } from './storage.ts';
+import { finiteUnit, probabilities } from './answer-validation.ts';
 
 const EPSILON = 1e-12;
-
-function finite(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
 
 function validAnswer(answer: unknown): answer is JevAnswer {
   if (answer === null || typeof answer !== 'object' || Array.isArray(answer)) return false;
   const value = answer as Record<string, unknown>;
-  if (value.type === 'noul') return finite(value.noul);
+  if (value.type === 'noul') return finiteUnit(value.noul);
   if (value.type !== 'choice' && value.type !== 'score') return false;
-  if (!finite(value.confidence) || value.probabilities === null || typeof value.probabilities !== 'object' || Array.isArray(value.probabilities)
-    || Object.keys(value.probabilities).length === 0 || !Object.values(value.probabilities).every(finite)) return false;
-  if (value.type === 'choice') return typeof value.choice === 'string';
-  return finite(value.score) && value.legend !== null && typeof value.legend === 'object' && !Array.isArray(value.legend);
+  if (!finiteUnit(value.confidence)) return false;
+  const distribution = probabilities(value.probabilities);
+  if (distribution === null) return false;
+  if (value.type === 'choice') return typeof value.choice === 'string' && Object.hasOwn(distribution, value.choice);
+  const keys = Object.keys(distribution);
+  return keys.length >= 2 && keys.length <= 10 && keys.every((key, index) => key === String(index))
+    && typeof value.score === 'number' && Number.isFinite(value.score) && value.score >= 0 && value.score <= keys.length - 1
+    && value.legend !== null && typeof value.legend === 'object' && !Array.isArray(value.legend);
 }
 
 function requireAnswers(answers: JevAnswer[], minimum: number): JevAnswer[] {

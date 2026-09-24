@@ -6,10 +6,10 @@ import { FuzzError } from '../src/util.ts';
 import type { JevAnswer } from '../src/types.ts';
 
 const choice = (selected: string, probabilities: Record<string, number> = { yes: 0.8, no: 0.2 }, confidence = 0.8): JevAnswer =>
-  ({ type: 'choice', choice: selected, probabilities, confidence });
+  ({ type: 'choice', choice: selected, probabilities: Object.hasOwn(probabilities, selected) ? probabilities : { ...probabilities, [selected]: 0 }, confidence });
 const noul = (value: number): JevAnswer => ({ type: 'noul', noul: value });
-const score = (value: number, probabilities: Record<string, number> = { '0': 0.2, '1': 0.8 }, confidence = 0.8): JevAnswer =>
-  ({ type: 'score', score: value, probabilities, confidence, legend: { '0': 'bad', '1': 'good' } });
+const score = (value: number, probabilities: Record<string, number> = { '0': 0.2, '1': 0.8, '2': 0 }, confidence = 0.8): JevAnswer =>
+  ({ type: 'score', score: value, probabilities, confidence, legend: { '0': 'bad', '1': 'good', '2': 'best' } });
 
 test('summarize preserves raw choice probability statistics and applies exact stability boundaries', () => {
   const stats = summarize([
@@ -42,6 +42,24 @@ test('summarize and compare reject nonfinite scores and malformed answer shapes'
   }
   const changing = new Proxy(score(1), { get(target, key, receiver) { return key === 'score' ? NaN : Reflect.get(target, key, receiver); } });
   assert.equal(summarize([changing]).mean, 1);
+});
+
+test('public summaries and comparisons reject provider-invalid answer values', () => {
+  const invalid: [JevAnswer, JevAnswer][] = [
+    [noul(0.5), noul(-5)],
+    [noul(0.5), noul(1.01)],
+    [choice('yes'), choice('yes', { yes: 2, no: -1 })],
+    [choice('yes'), choice('yes', { yes: 0.6, no: 0.2 })],
+    [choice('yes'), { type: 'choice', choice: 'absent', probabilities: { yes: 0.8, no: 0.2 }, confidence: 0.8 }],
+    [choice('yes'), choice('yes', { yes: 0.8, no: 0.2 }, 2)],
+    [score(1), score(100)],
+    [score(1), score(1, { '0': 0.2, '1': 0.8 }, -1)],
+    [score(1), score(1, { '0': 2, '1': -1 })],
+  ];
+  for (const [baseline, bad] of invalid) {
+    assert.throws(() => summarize([bad]), (error: unknown) => error instanceof FuzzError && error.code === 'CONFIG');
+    assert.throws(() => compare([baseline, baseline], [bad]), (error: unknown) => error instanceof FuzzError && error.code === 'CONFIG');
+  }
 });
 
 test('candidate hard failures are returned before confirmation and become FAIL after reproducible confirmation', () => {
