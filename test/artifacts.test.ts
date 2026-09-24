@@ -10,7 +10,7 @@ import { FakeProvider } from '../src/provider.ts';
 import { run, RunInterruptedError } from '../src/runner.ts';
 import { TOOL_VERSION } from '../src/version.ts';
 import { FuzzError } from '../src/util.ts';
-import { assertSafePath, pathComponents } from '../src/storage.ts';
+import { assertSafePath, pathComponents, privateDir, writePrivate } from '../src/storage.ts';
 import type { FailureArtifact, FuzzConfig, JevRequest } from '../src/types.ts';
 
 const request: JevRequest = { state: { trace: 'private' }, model: 'jev-test', questions: { decision: { type: 'choice', instructions: 'private instructions', criteria: { yes: 'yes', no: 'no' } } } };
@@ -36,8 +36,10 @@ test('saveArtifacts creates private complete reports and human text', async () =
   try {
     const report = await run(config, new FakeProvider(), { seed: 1, confirmRuns: 2, concurrency: 1, maxRequests: 100 });
     const saved = await saveArtifacts(report, root);
-    assert.equal((await lstat(saved)).mode & 0o777, 0o700);
-    assert.equal((await lstat(join(saved, 'report.json'))).mode & 0o777, 0o600);
+    if (process.platform !== 'win32') {
+      assert.equal((await lstat(saved)).mode & 0o777, 0o700);
+      assert.equal((await lstat(join(saved, 'report.json'))).mode & 0o777, 0o600);
+    }
     assert.ok((await readFile(join(saved, 'report.txt'), 'utf8')).includes(`JevFuzz ${TOOL_VERSION}`));
     assert.match(renderText(report), /baseline stable/);
     const display = structuredClone(report);
@@ -104,6 +106,19 @@ test('nested artifact storage refuses non-directories and existing runs', async 
     await assert.rejects(saveArtifacts(report, nested), /already exists/i);
     await writeFile(join(root, 'ordinary-file'), 'x');
     await assert.rejects(saveArtifacts(report, join(root, 'ordinary-file', 'child')), /not a directory/i);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('v2 private storage creates nested directories and a private file', async () => {
+  const root = await directory();
+  try {
+    const nested = await privateDir(join(root, 'v2', 'nested'));
+    await writePrivate(join(nested, 'evidence.json'), '{}');
+    assert.equal((await readFile(join(nested, 'evidence.json'), 'utf8')), '{}');
+    if (process.platform !== 'win32') {
+      assert.equal((await lstat(nested)).mode & 0o777, 0o700);
+      assert.equal((await lstat(join(nested, 'evidence.json'))).mode & 0o777, 0o600);
+    }
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
