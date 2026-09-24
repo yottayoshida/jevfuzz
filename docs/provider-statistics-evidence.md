@@ -43,6 +43,12 @@ fuzzing, replay, shrinking, and regression checks remain available.
 Sources inspected on 2026-09-23 and 2026-09-24. Absence from these inspected specifications is
 an evidence gap, not a claim that the provider cannot support these features.
 
+On 2026-09-24, a read-only request to list AI Gateways using the configured
+Cloudflare token returned HTTP 403, so this request supplied no gateway
+metadata. No gateway log query was completed in this verification. Even if the
+log `cached` field became accessible, it would only describe that gateway's
+cache state; it would not establish a fresh, independent origin inference.
+
 ## Evidence required before enabling fixed-stat
 
 The exact endpoint and model revision need verifiable evidence addressing the
