@@ -15,7 +15,7 @@ The input is synthetic; the API results are real. [Evidence and SVG source](docs
 Run in your repository with [GitHub Actions](docs/github-actions.md):
 
 ```yaml
-- uses: yottayoshida/jevfuzz@2b29d83f99814dc95644646b7721f5d12dd25695
+- uses: yottayoshida/jevfuzz@b9519beaa9a91e64890cefe3bf0c49c93eb3ed30
   with:
     command: fuzz
     target: .jevfuzz/campaign.json
