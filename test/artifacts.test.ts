@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, lstat, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, lstat, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, win32 } from 'node:path';
 import test from 'node:test';
@@ -106,6 +106,42 @@ test('nested artifact storage refuses non-directories and existing runs', async 
     await assert.rejects(saveArtifacts(report, nested), /already exists/i);
     await writeFile(join(root, 'ordinary-file'), 'x');
     await assert.rejects(saveArtifacts(report, join(root, 'ordinary-file', 'child')), /not a directory/i);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('concurrent saves of one run ID cannot both publish or overwrite', async () => {
+  const root = await directory();
+  try {
+    const report = await run(config, new FakeProvider(), { seed: 1, confirmRuns: 2, concurrency: 1, maxRequests: 100 });
+    const outcomes = await Promise.allSettled([saveArtifacts(report, root), saveArtifacts(report, root)]);
+    assert.equal(outcomes.filter(item => item.status === 'fulfilled').length, 1);
+    assert.equal(outcomes.filter(item => item.status === 'rejected').length, 1);
+    const saved = join(root, 'runs', report.run.id);
+    assert.equal(JSON.parse(await readFile(join(saved, 'manifest.json'), 'utf8')).run.id, report.run.id);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('artifact storage rejects writable ancestors before persisting payloads', async () => {
+  if (process.platform === 'win32') return; // POSIX mode bits do not describe Windows ACLs.
+  const root = await directory();
+  try {
+    const shared = join(root, 'shared');
+    await mkdir(shared); await chmod(shared, 0o777);
+    const report = await run(config, new FakeProvider(), { seed: 1, confirmRuns: 2, concurrency: 1, maxRequests: 100 });
+    await assert.rejects(saveArtifacts(report, join(shared, 'private')), /unsafe writes/i);
+    await assert.rejects(lstat(join(shared, 'private')));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('failed artifact publication leaves no completion manifest', async () => {
+  const root = await directory();
+  try {
+    const report = await run(config, new FakeProvider(), { seed: 1, confirmRuns: 2, concurrency: 1, maxRequests: 100 });
+    const first = report.cases[0]!.mutations[0]!.comparisons.decision!;
+    first.verdict = 'FAIL';
+    report.cases[0]!.baselineRequest = undefined;
+    await assert.rejects(saveArtifacts(report, root), /payloads required/i);
+    await assert.rejects(lstat(join(root, 'runs', report.run.id, 'manifest.json')));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

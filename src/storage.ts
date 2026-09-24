@@ -187,6 +187,9 @@ export async function privateDir(path: string): Promise<string> {
   return safe;
 }
 export async function syncDirectory(path: string): Promise<void> {
+  // Windows does not permit fsync on a directory handle. File contents are
+  // synced before this call; directory-entry durability follows the OS.
+  if (process.platform === 'win32') return;
   const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
   try { await handle.sync(); } finally { await handle.close(); }
 }

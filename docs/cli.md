@@ -154,13 +154,18 @@ thresholds, baseline/mutation/confirmation answers, usage, and request counts.
 Artifacts stay local. New directories use 0700, files 0600 where supported, and
 symlinks/overwrites are refused. **Full artifacts may contain private source and
 prompts.** File permissions do not prevent the same user from committing them;
-keep `.jevfuzz/` ignored. `--no-save-payloads` persists hashes and summaries only,
+keep `.jevfuzz/` ignored. On Windows, ACLs govern access and Node cannot fsync
+directory entries, though file contents are synced before publication.
+`--no-save-payloads` persists hashes and summaries only,
 and disables replay. A runtime error or cancellation saves a partial report with
 `run.status: "incomplete"` and `manifest.complete: false`, then exits 2. Validated
 answers and exact HTTP retry counts survive the interruption; unfinished
 confirmations never become failure artifacts. Library callers can catch
 `RunInterruptedError` and read its `report`. Custom providers must honor the
 supplied abort signal so in-flight work can settle before persistence.
+Run directory names are reserved exclusively and `manifest.json` is written
+last; a process crash while writing can leave a private directory with no
+manifest, which is not a complete artifact.
 Replay uses your current provider configuration and rechecks its request budget;
 historical answers are never treated as truth.
 
