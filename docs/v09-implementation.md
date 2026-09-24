@@ -19,6 +19,32 @@ The [provider record](provider-conformance.md#dual-provider-readiness-verificati
 documents the installed CLI verification of both provider paths and the
 additional Cloudflare live smoke.
 
+## Current unmerged local verification — 2026-09-24
+
+The `codex/json-validation-v09` branch closes three further boundary gaps:
+v1 `run`/`replay` now reject known credentials before provider dispatch, v1
+`import` rejects them before writing files, and public `compare`/`summarize`
+reject provider-invalid answer values. Cloudflare requests now set
+`cf-aig-max-attempts: 1` as well as `cf-aig-skip-cache: true` on every client
+attempt. This requests one gateway attempt per client attempt, but neither
+proves origin independence nor changes the disabled live `fixed-stat-v1` mode.
+
+`npm test` passed **235/235**, with zero skips, on Node 26.7.0. The complete
+source suite also passed **235/235**, with zero skips, on Node 22.18.0 and
+24.0.0. `npm run typecheck`, a clean TypeScript build, `git diff --check`,
+and `node scripts/demo-v09.ts` passed. The local synthetic demo used 27 logical
+calls and zero HTTP attempts. A fresh temporary source copy passed
+`scripts/verify-package.ts` with the installed bin for both adapters: 13 CLI
+commands and 44 intercepted fake HTTP calls per provider, with zero runtime
+dependencies. The package version remains `0.2.0`; none of these results is a
+current-head CI run, live API run, published package, or v0.9 release.
+
+The focused regression tests failed before each correction and passed after it.
+The reviewer route was requested as `gpt-5.6-terra/high`, but actual runtime
+model and effort could not be attested, so no independent-review pass is claimed.
+The optional quality receipt returned `QUALITY_INTERNAL_ERROR` (exit 2).
+Mandatory field acceptance and live origin-independence evidence remain open.
+
 ## Slices and acceptance properties
 
 1. Contracts and identity (M02-01/02/03/04): preserve v1 readers/exports;
