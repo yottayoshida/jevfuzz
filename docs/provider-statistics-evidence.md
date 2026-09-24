@@ -28,13 +28,19 @@ fuzzing, replay, shrinking, and regression checks remain available.
 - [AI Gateway caching](https://developers.cloudflare.com/ai-gateway/features/caching/)
   describes the `cf-aig-cache-status` response header. A gateway cache hit is
   evidence of reuse. A miss concerns that gateway layer only.
+- [AI Gateway request handling](https://developers.cloudflare.com/ai-gateway/configuration/request-handling/)
+  documents gateway-level retries and the per-request `cf-aig-max-attempts`
+  override. JevFuzz now requests one gateway attempt per client HTTP attempt;
+  this does not prove the provider executed one independent inference. A timed-out
+  client request, origin-side retry or deduplication, or a gateway that ignores
+  the header still leaves origin execution unverified.
 - The [TypeSafe API](https://docs.typesafe.ai/api) documents the typed request
   and response, and the [model documentation](https://docs.typesafe.ai/models)
   describes model versions and aliases. The inspected public specifications do
   not establish origin cache bypass, independent inference draws, or metadata
   that verifies those properties per observation.
 
-Sources inspected on 2026-09-23. Absence from these inspected specifications is
+Sources inspected on 2026-09-23 and 2026-09-24. Absence from these inspected specifications is
 an evidence gap, not a claim that the provider cannot support these features.
 
 ## Evidence required before enabling fixed-stat

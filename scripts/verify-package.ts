@@ -37,6 +37,8 @@ globalThis.fetch = async (url, init = {}) => {
   if (headers.get('cache-control') !== 'no-cache, no-store') fail('cache control');
   if ((provider === 'cloudflare') !== headers.has('cf-aig-skip-cache')) fail('cf-aig-skip-cache presence');
   if (provider === 'cloudflare' && headers.get('cf-aig-skip-cache') !== 'true') fail('cf-aig-skip-cache value');
+  if ((provider === 'cloudflare') !== headers.has('cf-aig-max-attempts')) fail('cf-aig-max-attempts presence');
+  if (provider === 'cloudflare' && headers.get('cf-aig-max-attempts') !== '1') fail('cf-aig-max-attempts value');
   const request = provider === 'cloudflare' ? payload.input : payload;
   if (!request || typeof request !== 'object' || !request.state || !request.questions) fail('request shape');
   if (provider === 'typesafe') {

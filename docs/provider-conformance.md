@@ -89,7 +89,14 @@ remains unverified; fixed-stat confirmation is still refused by both HTTP adapte
 
 ## Cache evidence boundary
 
-Cloudflare requests include `cf-aig-skip-cache: true` on every HTTP attempt.
+Cloudflare requests include `cf-aig-skip-cache: true` and
+`cf-aig-max-attempts: 1` on every client HTTP attempt. The latter requests that
+AI Gateway make only one upstream attempt, so gateway retries should not be
+hidden inside a JevFuzz attempt, per [Cloudflare's request-handling documentation](https://developers.cloudflare.com/ai-gateway/configuration/request-handling/).
+It may expose upstream 5xx responses that a
+gateway retry would previously have masked. Origin-side retries, deduplication,
+or a timed-out request remain unverified; the header was checked offline in the
+current package but has not been rechecked against live Cloudflare.
 Only a trimmed, case-insensitive `cf-aig-cache-status: HIT` response records
 `cached`; `MISS`, missing, and unrecognized values record `unknown`. This is
 observation metadata, not freshness or origin-independence evidence:

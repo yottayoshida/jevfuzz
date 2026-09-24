@@ -333,7 +333,7 @@ function cloudflareResult(raw: unknown): unknown {
 /** Minimal Workers AI adapter, kept separate because its wire format is not TypeSafe System One's. */
 export class CloudflareProvider extends HttpProvider {
   constructor(env: Environment = process.env, options: ProviderOptions = {}) { super(cloudflareUrl(env), tokenValue(env, 'CLOUDFLARE_API_TOKEN'), options); }
-  protected requestHeaders(): Record<string, string> { return { ...super.requestHeaders(), 'cf-aig-skip-cache': 'true' }; }
+  protected requestHeaders(): Record<string, string> { return { ...super.requestHeaders(), 'cf-aig-skip-cache': 'true', 'cf-aig-max-attempts': '1' }; }
   protected observedCache(response: Response): 'unknown' | 'cached' {
     return response.headers.get('cf-aig-cache-status')?.trim().toUpperCase() === 'HIT' ? 'cached' : 'unknown';
   }
