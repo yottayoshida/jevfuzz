@@ -4,7 +4,7 @@ import type { CaseReport, Comparison, DecisionProvider, FuzzCase, FuzzConfig, Fu
 import { generateMutations } from './mutate.ts';
 import { compare, summarize } from './compare.ts';
 import { thresholds, validateFuzzConfig, validateRequest } from './config.ts';
-import { canonicalJson } from './storage.ts';
+import { canonicalJson, hasSecrets } from './storage.ts';
 import { EvaluationBroker } from './engine/broker.ts';
 import { BudgetLedger } from './engine/budget.ts';
 import type { Phase } from './campaign-types.ts';
@@ -131,15 +131,18 @@ function validatePreparedMutation(item: unknown, testCase: FuzzCase): Mutation {
   return { recipe: mutation.recipe, idMap: mutation.idMap, request };
 }
 
-export async function run(config: FuzzConfig, provider: DecisionProvider, input: Partial<RunOptions> = {}, prepared?: Mutation[][]): Promise<FuzzReport> {
+export async function run(config: FuzzConfig, provider: DecisionProvider, input: Partial<RunOptions> = {}, prepared?: Mutation[][], secrets: readonly string[] = []): Promise<FuzzReport> {
   config = validateFuzzConfig(config);
+  assert(!hasSecrets(config, secrets), 'credential detected in request input; refusing provider dispatch');
   if (prepared !== undefined) {
     const clean = canonicalJson(prepared);
+    assert(!hasSecrets(clean, secrets), 'credential detected in prepared mutation; refusing provider dispatch');
     assert(Array.isArray(clean) && clean.length === config.cases.length && clean.every(Array.isArray), 'invalid prepared mutations');
     prepared = clean.map((list, index) => (list as unknown[]).map(item => validatePreparedMutation(item, config.cases[index]!)));
   }
   const opts = options(input);
   const mutations = prepared ?? config.cases.map(c => generateMutations(c, opts.seed));
+  assert(!hasSecrets(mutations, secrets), 'credential detected in mutation; refusing provider dispatch');
   const budget = plan(config, opts, mutations);
   if (!budget.withinBudget) throw new FuzzError('BUDGET', `request budget exceeded: planned worst case ${budget.worstCaseRequests}, --max-requests ${opts.maxRequests}`);
   const startAttempts = provider.httpAttempts ?? 0, startRetries = provider.httpRetries;
@@ -162,7 +165,7 @@ export async function run(config: FuzzConfig, provider: DecisionProvider, input:
   const ledger = new BudgetLedger({ logicalRequests: opts.maxRequests, httpAttempts: opts.maxRequests * 5, wallTimeSeconds: 86_400,
     discoveryRequests: budget.baselineRequests + budget.mutationRequests, confirmationRequests: budget.maximumConfirmationRequests,
     shrinkRequests: 0, finalConfirmationRequests: 0 });
-  const broker = new EvaluationBroker(provider, ledger, { signal, strict: false });
+  const broker = new EvaluationBroker(provider, ledger, { signal, strict: false, secrets: [...secrets] });
   const evaluate = async (request: JevRequest, phase: Phase = 'discovery'): Promise<JevResponse> => {
     signal.throwIfAborted();
     if (report.summary.logicalRequests >= opts.maxRequests) throw new FuzzError('BUDGET', 'logical request limit reached');

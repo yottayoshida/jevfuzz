@@ -4,7 +4,7 @@ import type { DecisionProvider, FailureArtifact, FuzzConfig, FuzzReport, Mutatio
 import { parseConfig, thresholds, validateRequest } from './config.ts';
 import { run, RunInterruptedError } from './runner.ts';
 import { assert, FuzzError, hash, integer, record } from './util.ts';
-import { parseBoundedJson, readBoundedText, readJson } from './storage.ts';
+import { hasSecrets, parseBoundedJson, readBoundedText, readJson } from './storage.ts';
 
 async function status(path: string) {
   try { return await lstat(path); } catch (error: unknown) {
@@ -179,8 +179,9 @@ export async function loadFailure(file: string): Promise<FailureArtifact> {
 }
 
 /** Replay a failure against the current provider; historical responses are never used. */
-export async function replay(rawArtifact: FailureArtifact, provider: DecisionProvider, input: Partial<RunOptions> = {}): Promise<FuzzReport> {
+export async function replay(rawArtifact: FailureArtifact, provider: DecisionProvider, input: Partial<RunOptions> = {}, secrets: readonly string[] = []): Promise<FuzzReport> {
   const artifact = validateArtifact(rawArtifact);
+  assert(!hasSecrets(artifact, secrets), 'credential detected in replay input; refusing provider dispatch');
   const invariants = Object.fromEntries(Object.keys(artifact.baselineRequest.questions).map(question => [question, question === artifact.questionId ? artifact.comparison.thresholds : {}]));
   const baselineRuns = input.baselineRuns ?? artifact.baselineRuns;
   const confirmRuns = input.confirmRuns ?? artifact.confirmRuns;
@@ -188,7 +189,7 @@ export async function replay(rawArtifact: FailureArtifact, provider: DecisionPro
   const config: FuzzConfig = { version: 1, name: `replay-${artifact.runId}`, cases: [{ id: artifact.caseId, request: artifact.baselineRequest, baselineRuns, mutations: { builtin: false, unorderedArrays: [], irrelevantFields: [], prosePaths: [] }, invariants }] };
   const prepared: Mutation[][] = [[{ recipe: artifact.mutation, request: artifact.mutatedRequest, idMap: artifact.idMap }]];
   try {
-    const report = await run(config, provider, { ...input, seed, baselineRuns, confirmRuns }, prepared);
+    const report = await run(config, provider, { ...input, seed, baselineRuns, confirmRuns }, prepared, secrets);
     report.run.mode = 'replay'; report.run.replayOf = artifact.runId;
     return report;
   } catch (error) {
@@ -198,7 +199,7 @@ export async function replay(rawArtifact: FailureArtifact, provider: DecisionPro
 }
 
 /** Import Jev Intent Review JSONL requests, discarding all historical responses. */
-export async function importTrace(file: string, outDir: string): Promise<string[]> {
+export async function importTrace(file: string, outDir: string, secrets: readonly string[] = []): Promise<string[]> {
   let lines: string[];
   try { lines = (await readBoundedText(file, 8 * 1024 * 1024)).split(/\r?\n/).filter(Boolean); } catch { throw new FuzzError('CONFIG', 'cannot read trace file'); }
   const configs: { id: string; config: FuzzConfig }[] = lines.map((line, index) => {
@@ -208,6 +209,7 @@ export async function importTrace(file: string, outDir: string): Promise<string[
     const id = `intent-review-${String(index + 1).padStart(4, '0')}`;
     return { id, config: parseConfig({ version: 1, name: id, cases: [{ id, request: trace.request }] }, `${id}.jevfuzz.json`) };
   });
+  assert(!hasSecrets(configs, secrets), 'credential detected in trace input; refusing import');
   const requestedOutput = resolve(outDir);
   const existingOutput = await status(requestedOutput);
   if (existingOutput?.isSymbolicLink()) throw new FuzzError('CONFIG', `refusing symbolic-link output directory: ${requestedOutput}`);

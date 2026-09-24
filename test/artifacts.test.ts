@@ -7,14 +7,28 @@ import test from 'node:test';
 import { importTrace, loadFailure, renderText, replay, saveArtifacts } from '../src/artifacts.ts';
 import { loadConfig } from '../src/config.ts';
 import { FakeProvider } from '../src/provider.ts';
-import { run } from '../src/runner.ts';
+import { run, RunInterruptedError } from '../src/runner.ts';
 import { TOOL_VERSION } from '../src/version.ts';
+import { FuzzError } from '../src/util.ts';
 import type { FailureArtifact, FuzzConfig, JevRequest } from '../src/types.ts';
 
 const request: JevRequest = { state: { trace: 'private' }, model: 'jev-test', questions: { decision: { type: 'choice', instructions: 'private instructions', criteria: { yes: 'yes', no: 'no' } } } };
 const config: FuzzConfig = { version: 1, name: 'artifact-case', cases: [{ id: 'artifact-case', request, baselineRuns: 2, mutations: { builtin: true, unorderedArrays: [], irrelevantFields: [], prosePaths: [] }, invariants: {} }] };
 
 async function directory(): Promise<string> { return mkdtemp(join(tmpdir(), 'jevfuzz-artifacts-')); }
+
+test('direct v1 replay rejects a known credential before an incomplete report or provider call', async () => {
+  const secret = 'direct\\secret';
+  const artifact = await loadFailure('fixtures/compat-v01/failure.json');
+  artifact.baselineRequest.state = secret;
+  artifact.mutatedRequest.state = secret;
+  delete artifact.baselineRequestHash;
+  delete artifact.mutatedRequestHash;
+  let calls = 0;
+  const provider = { async evaluate() { calls++; throw new Error('provider reached'); } };
+  await assert.rejects(replay(artifact, provider, {}, [secret]), (error: unknown) => error instanceof FuzzError && error.code === 'CONFIG' && !(error instanceof RunInterruptedError));
+  assert.equal(calls, 0);
+});
 
 test('saveArtifacts creates private complete reports and human text', async () => {
   const root = await directory();

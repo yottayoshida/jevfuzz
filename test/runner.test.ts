@@ -4,6 +4,7 @@ import { parseConfig } from '../src/config.ts';
 import { FakeProvider } from '../src/provider.ts';
 import { run, options, plan, exitCode, RunInterruptedError } from '../src/runner.ts';
 import { generateMutations } from '../src/mutate.ts';
+import { FuzzError } from '../src/util.ts';
 import type { DecisionProvider, JevRequest, JevResponse, Mutation } from '../src/types.ts';
 
 const config = () => parseConfig({ state: { b: 'evidence', a: 'other' }, model: 'jev-latest', questions: {
@@ -24,6 +25,15 @@ test('StableProvider passes all mutations; request plan and usage are exact', as
   assert.equal(p.worstCaseRequests, 3 + 3 * p.mutationRequests);
   assert.equal(p.maximumHttpAttempts, 5 * p.worstCaseRequests);
   assert.equal(exitCode(result), 0); assert.equal(result.run.mode, 'fake');
+});
+test('direct v1 run rejects a known credential before an incomplete report or provider call', async () => {
+  const secret = 'direct"secret';
+  const c = config();
+  c.cases[0]!.request.state = secret;
+  let calls = 0;
+  const provider = { async evaluate() { calls++; throw new Error('provider reached'); } };
+  await assert.rejects(run(c, provider, { seed: 1 }, undefined, [secret]), (error: unknown) => error instanceof FuzzError && error.code === 'CONFIG' && !(error instanceof RunInterruptedError));
+  assert.equal(calls, 0);
 });
 test('position sensitivity becomes confirmed FAIL with byte-identical confirmations', async () => {
   const bodies: string[] = [];
