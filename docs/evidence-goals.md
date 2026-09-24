@@ -46,6 +46,36 @@ the archived measurement revision; no benchmark results were relabeled or
 retuned. The result does not establish live application efficiency, and
 interaction3 remained undetected by both strategies.
 
+A bounded live comparison on 2026-09-24 used the already published synthetic
+request in `docs/assets/readme-finding.json` (`finding.candidate.basePayload`).
+Two independent Cloudflare campaigns differed in campaign name,
+`search.strategy`, and private output directory; offline planning confirmed
+identical 32-candidate ID sets. Both used seed 42, depth 2, 32 candidate
+slots, batches of eight, concurrency one, `paired-v1` with eight blocks, and
+identical ceilings of 52 logical requests, 52 HTTP attempts, 28 discovery
+requests, and 24 confirmation requests. The two declared invariant Choice
+contracts covered `relevance` and `satisfaction` under object-key order,
+question order, Choice-criteria order, and question-ID rename. Both observed
+`jev-1.13.0`, used 52 logical/HTTP calls with no client retries, and confirmed
+the same object-key-order violation fingerprint
+`f9b7f42d73242c3f8607c95675c3ef0db01d8ba4ba25435716248816fb5d556e`
+at call 40 (eight supporting paired blocks, zero control violations).
+Each run ended at its budget with one additional relation pending; exit 1
+reports the confirmed finding, not complete coverage. Uniform and feedback
+therefore **tied on this one known synthetic target**. The result neither
+weakens the frozen offline benchmark nor establishes general live efficiency.
+
+The raw configs, reports, and journals remain private under
+`/private/tmp/jevfuzz-live-compare-20260924/`; they contain no credentials but
+retain full request and response payloads. Raw config SHA-256 digests were
+`751c100b4158890f020c32e0a5e04cebca75f8364b0ca6c900cd283cd105ba0e`
+(uniform) and
+`2f3f8296578ce6ded3591e6e277dd66ab13f5b58795c0d9cc54b5ac5c932b9aa`
+(feedback). The corresponding report digests were
+`a5ef80e48d1368879c5f503f2c8cbd36fc734ffd9359110652c26023220bd512`
+and `eaf391b1b54394eef6ac977bc7743871ea3a368fa61a3239518d9316382e3283`.
+Both campaigns used branch head `8d77eb5`; this is local-only live evidence.
+
 ## 2. Live provider statistical evidence
 
 Cloudflare-specific requests now carry the documented gateway skip-cache
