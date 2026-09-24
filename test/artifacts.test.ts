@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, lstat, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, win32 } from 'node:path';
 import test from 'node:test';
 
 import { importTrace, loadFailure, renderText, replay, saveArtifacts } from '../src/artifacts.ts';
@@ -10,6 +10,7 @@ import { FakeProvider } from '../src/provider.ts';
 import { run, RunInterruptedError } from '../src/runner.ts';
 import { TOOL_VERSION } from '../src/version.ts';
 import { FuzzError } from '../src/util.ts';
+import { assertSafePath, pathComponents } from '../src/storage.ts';
 import type { FailureArtifact, FuzzConfig, JevRequest } from '../src/types.ts';
 
 const request: JevRequest = { state: { trace: 'private' }, model: 'jev-test', questions: { decision: { type: 'choice', instructions: 'private instructions', criteria: { yes: 'yes', no: 'no' } } } };
@@ -66,14 +67,44 @@ test('hash-only artifacts omit payloads and never create replay files', async ()
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test('artifact path traversal includes every Windows drive and UNC component', () => {
+  const driveRoot = 'C:\\';
+  const drive = win32.join(driveRoot, 'Users', 'alice', 'runs');
+  assert.deepEqual(pathComponents(drive, win32), [
+    win32.join(driveRoot, 'Users'),
+    win32.join(driveRoot, 'Users', 'alice'),
+    drive,
+  ]);
+  const shareRoot = '\\\\server\\share\\';
+  const unc = win32.join(shareRoot, 'folder', 'runs');
+  assert.deepEqual(pathComponents(unc, win32), [
+    win32.join(shareRoot, 'folder'),
+    unc,
+  ]);
+});
+
 test('artifact directories reject symlink components', async () => {
   const root = await directory();
   const target = await directory();
   try {
-    await symlink(target, join(root, 'linked'));
+    await symlink(target, join(root, 'linked'), process.platform === 'win32' ? 'junction' : 'dir');
     const report = await run(config, new FakeProvider(), { seed: 1, confirmRuns: 2, concurrency: 1, maxRequests: 100 });
     await assert.rejects(saveArtifacts(report, join(root, 'linked')), /symbolic-link|symlink/i);
+    await assert.rejects(assertSafePath(join(root, 'linked', 'child')), /symbolic links/i);
   } finally { await rm(root, { recursive: true, force: true }); await rm(target, { recursive: true, force: true }); }
+});
+
+test('nested artifact storage refuses non-directories and existing runs', async () => {
+  const root = await directory();
+  try {
+    const report = await run(config, new FakeProvider(), { seed: 1, confirmRuns: 2, concurrency: 1, maxRequests: 100 });
+    const nested = join(root, 'nested', 'private');
+    const saved = await saveArtifacts(report, nested);
+    assert.equal((await lstat(saved)).isDirectory(), true);
+    await assert.rejects(saveArtifacts(report, nested), /already exists/i);
+    await writeFile(join(root, 'ordinary-file'), 'x');
+    await assert.rejects(saveArtifacts(report, join(root, 'ordinary-file', 'child')), /not a directory/i);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test('importTrace extracts only validated Jev requests', async () => {

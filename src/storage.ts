@@ -1,6 +1,6 @@
 import { constants } from 'node:fs';
 import { lstat, mkdir, open, readFile, readdir, rename, rm } from 'node:fs/promises';
-import { dirname, join, parse, resolve } from 'node:path';
+import { dirname, join, parse, resolve, sep } from 'node:path';
 import { hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { assert, FuzzError } from './util.ts';
@@ -140,11 +140,16 @@ export function storagePath(path: string): string {
   }
   return absolute;
 }
+type PathOperations = { parse(path: string): { root: string }; join(...parts: string[]): string; sep: string };
+/** Full prefixes used when checking each directory component before I/O. */
+export function pathComponents(absolute: string, paths: PathOperations = { parse, join, sep }): string[] {
+  const root = paths.parse(absolute).root;
+  let current = root;
+  return absolute.slice(root.length).split(paths.sep).filter(Boolean).map(name => (current = paths.join(current, name)));
+}
 export async function assertSafePath(path: string): Promise<string> {
-  const absolute = storagePath(path), root = parse(absolute).root;
-  let part = root;
-  for (const name of absolute.slice(root.length).split('/').filter(Boolean)) {
-    part = join(part, name);
+  const absolute = storagePath(path);
+  for (const part of pathComponents(absolute)) {
     try { assert(!(await lstat(part)).isSymbolicLink(), 'symbolic links are not permitted'); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   }

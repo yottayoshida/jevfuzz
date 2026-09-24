@@ -91,6 +91,18 @@ test('preflight budget violation and invalid run controls make no provider calls
   await assert.rejects(run(config(), provider, { confirmRuns: 1 }), /confirm/);
   assert.equal(calls, 0);
 });
+test('multiple requested models fail preflight before any provider call', async () => {
+  const c = config();
+  const second = structuredClone(c.cases[0]!);
+  second.id = 'second-model'; second.request.model = 'jev-other';
+  c.cases.push(second);
+  let calls = 0;
+  const provider = new FakeProvider(request => { calls++; return answer(request, 'a'); });
+  assert.throws(() => plan(c, options({ seed: 42, maxRequests: 1000 })), /one requested model/i);
+  await assert.rejects(run(c, provider, { seed: 42, maxRequests: 1000 }),
+    (error: unknown) => error instanceof FuzzError && error.code === 'CONFIG' && /one requested model/i.test(error.message));
+  assert.equal(calls, 0);
+});
 test('direct run rejects non-JSON request values before invoking a provider', async () => {
   let calls = 0;
   const provider = new FakeProvider(r => { calls++; return answer(r, 'a'); });

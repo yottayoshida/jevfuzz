@@ -1,10 +1,10 @@
 import { open, lstat, mkdir, rename, rm } from 'node:fs/promises';
-import { join, parse, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { DecisionProvider, FailureArtifact, FuzzConfig, FuzzReport, Mutation, RunOptions } from './types.ts';
 import { parseConfig, thresholds, validateRequest } from './config.ts';
 import { run, RunInterruptedError } from './runner.ts';
 import { assert, FuzzError, hash, integer, record } from './util.ts';
-import { hasSecrets, parseBoundedJson, readBoundedText, readJson } from './storage.ts';
+import { hasSecrets, parseBoundedJson, pathComponents, readBoundedText, readJson } from './storage.ts';
 
 async function status(path: string) {
   try { return await lstat(path); } catch (error: unknown) {
@@ -15,10 +15,8 @@ async function status(path: string) {
 
 /** Create each directory after refusing to traverse a symbolic link. */
 async function privateDirectory(path: string): Promise<string> {
-  const absolute = resolve(path), root = parse(absolute).root;
-  let current = root;
-  for (const part of absolute.slice(root.length).split('/').filter(Boolean)) {
-    current = join(current, part);
+  const absolute = resolve(path);
+  for (const current of pathComponents(absolute)) {
     const existing = await status(current);
     // macOS exposes its system temporary directory through /var -> /private/var.
     // Permit that fixed OS alias while refusing every caller-controlled link.

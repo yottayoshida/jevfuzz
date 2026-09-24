@@ -142,6 +142,10 @@ Per-question `invariants` supports `type` (`choice_stable`, `noul_stable`,
 
 ## Artifacts and replay
 
+Legacy `plan` and `run` require exactly one requested model across all input
+cases. Mixed-model inputs fail before any provider call; a change in the
+observed model during a single-model run remains inconclusive.
+
 `.jevfuzz/runs/<run-id>/` contains `manifest.json`, `report.json`, `report.txt`,
 and independently replayable `failures/F001.json` files. JSON report version 1 is
 the public contract. It records versions, seed, hashes, requested/observed models,

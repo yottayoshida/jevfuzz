@@ -29,6 +29,7 @@ export function options(input: Partial<RunOptions> = {}): RunOptions {
   };
 }
 export function plan(config: FuzzConfig, opts: RunOptions, prepared?: Mutation[][]) {
+  assert(new Set(config.cases.map(c => c.request.model)).size === 1, 'a run requires exactly one requested model');
   const mutations = prepared ?? config.cases.map(c => generateMutations(c, opts.seed));
   const baselineRequests = config.cases.reduce((n, c) => n + (opts.baselineRuns ?? c.baselineRuns), 0);
   const mutationRequests = mutations.reduce((n, m) => n + m.length, 0);
