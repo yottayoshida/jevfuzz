@@ -114,7 +114,9 @@ unknown freshness or sampling assumptions into statistical evidence.
 Candidate integration points were identified in jev-intent-review and
 jev-sscope. Neither prior synthetic dogfood nor the Cloudflare probe counts as
 a real external-user pilot. A third real workload and two users other than the
-author remain to be identified by the owner.
+author remain unverified. The owner is not required to choose participants;
+JevFuzz has a self-service GitHub Action, and actual independent use must be
+observed before it can count.
 
 The [field protocol](field-validation.md) records the required owner-approved
 relations, participant observation, real application changes, fresh regression

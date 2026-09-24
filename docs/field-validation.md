@@ -15,6 +15,11 @@ exercise is not a participant pilot or the planned 20–50-seed evaluation.
 The actual app CLI was not claimed to have accepted the issue's heading format.
 All acceptance counts remain zero.
 
+On 2026-09-24, a read-only public GitHub code search for `jevfuzz@` returned
+no indexed workflow examples. Search coverage is incomplete, so this is not
+proof that no one uses the Action; it supplies no participant or usability
+observation to count.
+
 A second local preparation selected 20 existing private `jev-sscope` session
 states and reconstructed the historical four-question request definition from
 application commit `ec0164724c3e003ae55ffecd03854af783799e47`. The built planner
@@ -46,10 +51,13 @@ does not count as a completed fix loop. Count only trials actually performed.
 | jev-sscope | `buildState` and `askJev` construct the session-evaluation request. The history endpoint contains summaries, not a complete replayable request. | Owner-selected real session data and an explicit request export. No exporter or production change is implied by this protocol. |
 | Third workload | Not identified. | An actual application and decision owner; routing/filter examples are not evidence of a deployed workload. |
 
-The two participants and the third workload must be identified before their
-acceptance rows can be completed. Recruiting or contacting people is a separate
-action requiring authorization. Provider keys and business payloads are never
-part of a public pilot record.
+The two participants and the third workload must be evidenced before their
+acceptance rows can be completed. JevFuzz is already available as a self-service
+GitHub Action; its owner is not required to nominate participants or select their
+repositories. Public uses can be discovered and assessed, but a workflow file
+alone does not prove that another developer understood a result. Recruiting or
+contacting people is a separate action requiring authorization. Provider keys
+and business payloads are never part of a public pilot record.
 
 ## Per-workload procedure
 
