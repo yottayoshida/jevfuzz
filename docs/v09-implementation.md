@@ -2,8 +2,9 @@
 
 Package version: `0.2.0`. The v0.9 labels below refer to design milestones,
 not the package release number. Bounded Cloudflare live release verification
-passed; mandatory field acceptance and the full provider matrix remain
-outstanding. This does not establish external adoption or complete v0.9 acceptance.
+passed and the provider matrix distinguishes tested from untested behavior.
+Mandatory field acceptance remains outstanding, so this does not establish
+external adoption or complete v0.9 acceptance.
 
 Design authority: the JevFuzz v1 product policy, detailed design, roadmap,
 benchmark plan, and evidence notes, dated 2026-09-22.
@@ -44,7 +45,9 @@ The focused regression tests failed before each correction and passed after it.
 The reviewer route was requested as `gpt-5.6-terra/high`, but actual runtime
 model and effort could not be attested, so no independent-review pass is claimed.
 The optional quality receipt returned `QUALITY_INTERNAL_ERROR` (exit 2).
-Mandatory field acceptance and live origin-independence evidence remain open.
+Mandatory field acceptance remains open. Live origin-independent sampling is
+unproven, so `fixed-stat-v1` remains disabled for both HTTP adapters; the owner
+does not require TypeSafe-direct live verification for this implementation.
 
 ## PR #9 follow-up evidence — 2026-09-24
 
@@ -65,9 +68,9 @@ On POSIX, the legacy artifact writer checks directory ownership and unsafe
 ancestor writes.
 On Windows, caller-supplied storage still requires an ACL-private parent;
 the process does not inspect ACLs. Same-user concurrent path replacement
-is outside the storage threat model. These constraints do not change the
-unmet TypeSafe-direct, origin-independent statistical, or field-acceptance
-criteria.
+is outside the storage threat model. These constraints do not resolve field
+acceptance or justify enabling live statistical claims. TypeSafe-direct live
+verification is deferred under the owner's stated assumption, not a release gate.
 
 ## Slices and acceptance properties
 
@@ -195,19 +198,20 @@ false completion after quota failure, retry budget errors mislabeled as storage
 errors, and omitted declared prose whitespace reductions. The independent
 reviews are local evidence, not GitHub reviews.
 
-## Field acceptance still outstanding
+## Field acceptance and provider scope
 
 - M03 usability observation and M09-05: three real workload families, two
   external users, two real counterexample → fix → regression loops. Bundled
   synthetic routing/filter/risk examples and the demo do not satisfy this.
-- M09-02 full provider conformance: bounded Cloudflare v0.2.0 live verification
+- M09-02 provider evidence scope: bounded Cloudflare v0.2.0 live verification
   passed (138 logical / HTTP calls), including fresh replay, an actual permutation
   reduction, and a corpus regression check. TypeSafe-direct live behavior and
   cache freshness remain unverified; fixed-stat is refused for both HTTP adapters.
   Direct TypeSafe live validation is deferred by the owner; a direct key is not
-  a prerequisite for implementation. The owner also chose to continue without
-  a provider inquiry. Neither decision changes the unresolved statistical or
-  field-acceptance evidence.
+  a prerequisite for implementation or release. The owner also chose to
+  continue without a provider inquiry. Neither decision proves live
+  origin-independent samples or satisfies field acceptance.
+
 ## Local benchmark evidence
 
 M04-07/M09-06 local simulator acceptance passed: 6,000 trials (12 families ×

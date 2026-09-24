@@ -414,11 +414,13 @@ participant assessment, or fix loop is claimed from this preparation. The
 campaign SHA-256 is
 `a9807cc1dda0a7cdd3b00a07e9a939b22047a7dc31ae6166a6969aebb9d7d389`.
 
-The owner authorized PR delivery and merge after completion. The two remaining
-goal conditions are unchanged: verified live sampling assumptions, and actual
-external-user/workload/fix-loop evidence. Passing code checks or finishing the
-README does not satisfy them. No provider inquiry or participant contact is
-authorized or planned.
+The owner authorized PR delivery and merge after completion. The remaining
+PRD field condition is actual external-user/workload/fix-loop evidence. Direct
+TypeSafe live verification is explicitly deferred; it is not a prerequisite.
+Without independent live sampling evidence, `fixed-stat-v1` stays disabled for
+HTTP adapters, and no live statistical guarantee is claimed. Passing code
+checks or finishing the README does not satisfy field acceptance. No provider
+inquiry or participant contact is authorized or planned.
 
 The integrated diff classifier still reports state recovery, verification
 integrity, and change size as high-risk; the existing source/benchmark,
