@@ -1,7 +1,7 @@
 import { basename } from 'node:path';
 import type { FuzzCase, FuzzConfig, Invariant, JevRequest, MutationConfig, Thresholds } from './types.ts';
 import { assert, atPath, FuzzError, integer, pathTokens, record } from './util.ts';
-import { boundedJson, readJson } from './storage.ts';
+import { boundedJson, canonicalJson, readJson } from './storage.ts';
 
 export const DEFAULT_THRESHOLDS: Thresholds = {
   noulBaselineRange: 0.10, scoreBaselineRange: 0.35, noulThreshold: 0.5,
@@ -15,7 +15,7 @@ function content(value: unknown, nullable = false): boolean {
   return (nullable && value === null) || typeof value === 'string' || Array.isArray(value) || record(value);
 }
 export function validateRequest(value: unknown): JevRequest {
-  boundedJson(value);
+  value = canonicalJson(value);
   assert(record(value), 'request must be an object');
   keys(value, ['state', 'model', 'questions'], 'request');
   assert(content(value.state), 'state must be string, object or array');
@@ -39,7 +39,7 @@ export function validateRequest(value: unknown): JevRequest {
       }
     } else assert(false, 'unsupported question type');
   }
-  return structuredClone(value) as unknown as JevRequest;
+  return value as unknown as JevRequest;
 }
 export function thresholds(invariant: Invariant = {}): Thresholds {
   assert(record(invariant), 'invariant must be an object');
@@ -91,7 +91,7 @@ function mutations(raw: unknown, request: JevRequest): MutationConfig {
   return { builtin: value.builtin ?? true, unorderedArrays: arrays, irrelevantFields: fields, prosePaths: prose } as MutationConfig;
 }
 export function parseConfig(value: unknown, filename = 'request.json'): FuzzConfig {
-  boundedJson(value, 64, 100_000);
+  value = canonicalJson(value, 64, 100_000);
   assert(record(value), 'configuration must be an object');
   if (!Object.hasOwn(value, 'version') && !Object.hasOwn(value, 'cases')) {
     const request = validateRequest(value);
@@ -119,6 +119,30 @@ export function parseConfig(value: unknown, filename = 'request.json'): FuzzConf
     return { id: c.id, request, baselineRuns: runs, mutations: mutations(c.mutations, request), invariants: invariants as Record<string, Invariant> };
   });
   return { version: 1, name: value.name, cases };
+}
+/** Revalidates direct library configs before mutation generation or report serialization. */
+export function validateFuzzConfig(value: unknown): FuzzConfig {
+  const clean = canonicalJson(value);
+  assert(record(clean) && clean.version === 1 && typeof clean.name === 'string' && clean.name.length > 0 && Array.isArray(clean.cases) && clean.cases.length > 0, 'invalid fuzz configuration');
+  keys(clean, ['version', 'name', 'cases'], 'configuration');
+  const ids = new Set<string>();
+  const cases: FuzzCase[] = clean.cases.map(entry => {
+    assert(record(entry), 'invalid fuzz case');
+    keys(entry, ['id', 'request', 'baselineRuns', 'mutations', 'invariants'], 'case');
+    assert(typeof entry.id === 'string' && entry.id.length > 0 && !ids.has(entry.id), 'case ID missing or duplicate');
+    ids.add(entry.id);
+    const request = validateRequest(entry.request);
+    const baselineRuns = integer(entry.baselineRuns, 'baseline runs', 2);
+    const mutationConfig = mutations(entry.mutations, request);
+    assert(record(entry.invariants), 'invariants must be an object');
+    for (const [id, invariant] of Object.entries(entry.invariants)) {
+      assert(Object.hasOwn(request.questions, id) && record(invariant), 'invariant must refer to a question');
+      thresholds(invariant);
+      assert(invariant.type === undefined || invariant.type === `${request.questions[id]!.type}_stable`, 'invariant type must match question');
+    }
+    return { id: entry.id, request, baselineRuns, mutations: mutationConfig, invariants: entry.invariants as Record<string, Invariant> };
+  });
+  return { version: 1, name: clean.name, cases };
 }
 export async function loadConfig(filename: string): Promise<FuzzConfig> {
   let value: unknown;

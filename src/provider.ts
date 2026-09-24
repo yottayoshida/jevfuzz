@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { DecisionProvider, EvaluateOptions, JevAnswer, JevRequest, JevResponse, ProviderCapabilities } from './types.ts';
 import { FuzzError, record, rng } from './util.ts';
+import { validateRequest } from './config.ts';
+import { canonicalJson, parseBoundedJson } from './storage.ts';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 const DEFAULT_TYPESAFE_HOST = 'https://api.typesafe.ai';
@@ -77,6 +79,14 @@ function validAnswer(value: unknown, question: JevRequest['questions'][string]):
 
 /** Validates the complete Jev response against both the public response schema and its request. */
 export function validateResponse(raw: unknown, request: JevRequest): JevResponse {
+  try { request = validateRequest(request); } catch { throw providerError('PROVIDER_REQUEST', 'invalid provider request'); }
+  let isRecord = false;
+  try { isRecord = record(raw); } catch { throw responseError(); }
+  if (!isRecord) throw responseError();
+  let observedModel: unknown;
+  try { observedModel = Object.getOwnPropertyDescriptor(raw as object, 'model')?.value; } catch { throw responseError(); }
+  if (typeof observedModel !== 'string' || observedModel.trim() === '') throw missingModelError();
+  try { raw = canonicalJson(raw); } catch { throw responseError(); }
   if (!record(raw)) throw responseError();
   if (typeof raw.model !== 'string' || raw.model.trim() === '') throw missingModelError();
   if (!record(raw.answers) || !record(raw.usage)) throw responseError();
@@ -250,6 +260,13 @@ abstract class HttpProvider implements DecisionProvider {
   protected observedCache(_response: Response): 'unknown' | 'cached' { return 'unknown'; }
 
   async evaluate(request: JevRequest, options: EvaluateOptions = {}): Promise<JevResponse> {
+    try {
+      request = validateRequest(request);
+      if (options.payload !== undefined) {
+        const supplied = validateRequest(parseBoundedJson(options.payload));
+        if (JSON.stringify(supplied) !== JSON.stringify(request)) throw responseError();
+      }
+    } catch { throw providerError('PROVIDER_REQUEST', 'invalid provider request'); }
     const payload = this.serialize(request, options.payload);
     for (let attempt = 1; attempt <= this.#maxAttempts; attempt++) {
       if (options.signal?.aborted) throw abortError(options.signal);
@@ -372,5 +389,10 @@ export class FakeProvider implements DecisionProvider {
   #index = 0;
   readonly #handler: (request: JevRequest, index: number) => JevResponse;
   constructor(handler: (request: JevRequest, index: number) => JevResponse = defaultResponse) { this.#handler = handler; }
-  async evaluate(request: JevRequest, options: EvaluateOptions = {}): Promise<JevResponse> { options.signal?.throwIfAborted(); const result = validateResponse(this.#handler(request, this.#index++), request); await options.observedMetadata?.({ cache: 'fresh' }); return result; }
+  async evaluate(request: JevRequest, options: EvaluateOptions = {}): Promise<JevResponse> {
+    options.signal?.throwIfAborted();
+    try { request = validateRequest(request); } catch { throw providerError('PROVIDER_REQUEST', 'invalid provider request'); }
+    const result = validateResponse(this.#handler(request, this.#index++), request);
+    await options.observedMetadata?.({ cache: 'fresh' }); return result;
+  }
 }

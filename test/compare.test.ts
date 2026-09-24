@@ -32,6 +32,17 @@ test('summarize preserves raw choice probability statistics and applies exact st
 test('compare rejects baseline collections with fewer than two valid answers', () => {
   assert.throws(() => compare([noul(0.4)], [noul(0.8)]), (error: unknown) => error instanceof FuzzError && error.code === 'CONFIG');
 });
+test('summarize and compare reject nonfinite scores and malformed answer shapes', () => {
+  for (const value of [NaN, Infinity, -Infinity]) {
+    assert.throws(() => summarize([score(value)]), (error: unknown) => error instanceof FuzzError && error.code === 'CONFIG');
+    assert.throws(() => compare([score(1), score(1)], [score(value)]), (error: unknown) => error instanceof FuzzError && error.code === 'CONFIG');
+  }
+  for (const value of [null, { type: 'other' }, { type: 'choice', choice: 'yes', confidence: 1, probabilities: new Map() }]) {
+    assert.throws(() => summarize([value as JevAnswer]), (error: unknown) => error instanceof FuzzError && error.code === 'CONFIG');
+  }
+  const changing = new Proxy(score(1), { get(target, key, receiver) { return key === 'score' ? NaN : Reflect.get(target, key, receiver); } });
+  assert.equal(summarize([changing]).mean, 1);
+});
 
 test('candidate hard failures are returned before confirmation and become FAIL after reproducible confirmation', () => {
   const baseline = [choice('yes'), choice('yes')];

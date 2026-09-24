@@ -138,14 +138,16 @@ test('human confirmed failure identifies decisions, strategy and the actual repl
 });
 
 test('replay uses exact artifact requests, confirms position-sensitive failure, and preflights budget', async () => {
-  const mutated = structuredClone(request);
-  mutated.state = { trace: 'private', reordered: true };
+  const baseline = structuredClone(request);
+  baseline.state = { trace: 'private', reordered: true };
+  const mutated = structuredClone(baseline);
+  mutated.state = { reordered: true, trace: 'private' };
   const artifact: FailureArtifact = {
     version: 1, runId: 'r1', caseId: 'c1', questionId: 'decision', mutation: { type: 'object_key_order', strategy: 'reverse', seed: 2 }, idMap: { decision: 'decision' },
-    baselineRequest: request, mutatedRequest: mutated,
+    baselineRequest: baseline, mutatedRequest: mutated,
     baselineResponses: [], mutatedResponses: [], comparison: { verdict: 'FAIL', reason: 'FAIL_CHOICE_CHANGED', warnings: [], baseline: { type: 'choice', stable: true, runs: 2, modalChoice: 'yes', agreementRatio: 1 }, mutated: { type: 'choice', stable: true, runs: 3, modalChoice: 'no', agreementRatio: 1 }, thresholds: { noulBaselineRange: .1, scoreBaselineRange: .35, noulThreshold: .5, noulMinDelta: .15, scoreDelta: .5, jsDivergence: .15, confidenceDrop: .3, noulProbabilityShift: .2 }, reproduced: 3, observations: 3 }, model: 'jev-test', seed: 2, baselineRuns: 2, confirmRuns: 2,
   };
-  const provider = new FakeProvider(input => ({ model: 'jev-test', answers: { decision: input.state && typeof input.state === 'object' && 'reordered' in input.state ? { type: 'choice', choice: 'no', probabilities: { yes: .1, no: .9 }, confidence: .9 } : { type: 'choice', choice: 'yes', probabilities: { yes: .9, no: .1 }, confidence: .9 } }, usage: { input_tokens: 1, output_tokens: 1 } }));
+  const provider = new FakeProvider(input => ({ model: 'jev-test', answers: { decision: Object.keys(input.state)[0] === 'reordered' ? { type: 'choice', choice: 'no', probabilities: { yes: .1, no: .9 }, confidence: .9 } : { type: 'choice', choice: 'yes', probabilities: { yes: .9, no: .1 }, confidence: .9 } }, usage: { input_tokens: 1, output_tokens: 1 } }));
   const report = await replay(artifact, provider, { maxRequests: 20, concurrency: 1, seed: 9, baselineRuns: 3, confirmRuns: 3 });
   assert.equal(report.run.mode, 'replay');
   assert.equal(report.summary.fail, 1);

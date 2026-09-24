@@ -47,6 +47,22 @@ test('validateResponse accepts complete typed answers and rejects malformed dist
   delete missingModel.model;
   assert.throws(() => validateResponse(missingModel, request), { message: /actual model version/i });
 });
+test('providers reject non-JSON requests before fetch or handler dispatch', async () => {
+  let calls = 0;
+  const bad = { ...request, state: new Map([['secret', 'value']]) } as unknown as JevRequest;
+  const live = new TypeSafeProvider({ TYPESAFE_API_KEY: 'private-key' }, { fetch: async () => { calls++; return json(response); } });
+  const cloudflare = new CloudflareProvider({ CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32), CLOUDFLARE_API_TOKEN: 'private-key' }, { fetch: async () => { calls++; return json(response); } });
+  const fake = new FakeProvider(() => { calls++; return response; });
+  for (const provider of [live, cloudflare, fake]) await assert.rejects(provider.evaluate(bad), /request|JSON|invalid/i);
+  await assert.rejects(live.evaluate(request, { payload: JSON.stringify(bad) }), /invalid provider request/i);
+  assert.equal(calls, 0);
+  assert.throws(() => validateResponse({ ...response, answers: { ...response.answers, score: { ...response.answers.score, legend: new Map() } } }, request), /invalid provider response/i);
+  assert.throws(() => validateResponse({ model: 'm', answers: {}, usage: { input_tokens: 0, output_tokens: 0 } }, { ...request, questions: new Map() } as unknown as JevRequest), /invalid provider request/i);
+  let getterCalls = 0;
+  const getter = Object.defineProperty({ ...response }, 'model', { enumerable: true, get() { getterCalls++; return 'm'; } });
+  assert.throws(() => validateResponse(getter, request));
+  assert.equal(getterCalls, 0);
+});
 
 test('TypeSafeProvider retries 429 and 529, serializes the request once, and preserves payload identity', async () => {
   const calls: RequestInit[] = [];

@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { boundedJson, canonicalJson } from '../src/storage.ts';
 import assert from 'node:assert/strict';
 import { parseConfig, thresholds } from '../src/config.ts';
 import { generateMutations } from '../src/mutate.ts';
@@ -10,6 +11,30 @@ const raw = { state: { b: [3, 1, 2], a: { z: 0, y: 1 } }, model: 'jev-latest', q
   bool: { type: 'noul', instructions: 'yes?' },
 } };
 const fixture = () => parseConfig(raw).cases[0]!;
+test('JSON boundary rejects non-JSON objects, sparse arrays, accessors and oversized structure', () => {
+  for (const value of [new Date(), new Map(), new Set(), new (class Item { value = 1; })(), new Array(100_000), classedArray()]) {
+    assert.throws(() => boundedJson({ nested: value }, 64, 10));
+    assert.throws(() => parseConfig({ ...raw, state: { nested: value } }));
+  }
+  let reads = 0;
+  const withGetter = Object.defineProperty({}, 'value', { enumerable: true, get() { reads++; return 'later'; } });
+  assert.throws(() => canonicalJson(withGetter));
+  assert.equal(reads, 0);
+  const sparse = [, 'x'];
+  assert.throws(() => boundedJson(sparse));
+  assert.doesNotThrow(() => boundedJson([null, 'x'], 1, 3));
+  assert.throws(() => boundedJson([null, 'x'], 1, 2), /structural limit/);
+  const plain = Object.assign(Object.create(null), { value: [1, true, null] });
+  assert.deepEqual(JSON.parse(JSON.stringify(canonicalJson(plain))), { value: [1, true, null] });
+  for (const trap of ['getPrototypeOf', 'ownKeys', 'getOwnPropertyDescriptor'] as const) {
+    const hostile = new Proxy({ value: 'x' }, { [trap]: () => { throw new Error('payload-sentinel'); } });
+    assert.throws(() => canonicalJson(hostile), (error: unknown) =>
+      error instanceof Error && !error.message.includes('payload-sentinel'));
+  }
+  assert.throws(() => boundedJson({ nested: { value: true } }, 1), /structural limit/);
+  assert.doesNotThrow(() => boundedJson({ nested: { value: true } }, 2));
+});
+function classedArray(): number[] { return new (class extends Array<number> {})(1, 2); }
 test('raw and wrapper configuration infer defaults and reject unknown schemas/types/fields', () => {
   assert.equal(fixture().baselineRuns, 3);
   assert.equal(fixture().id, 'request.json');

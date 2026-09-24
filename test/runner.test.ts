@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { parseConfig } from '../src/config.ts';
 import { FakeProvider } from '../src/provider.ts';
 import { run, options, plan, exitCode, RunInterruptedError } from '../src/runner.ts';
+import { generateMutations } from '../src/mutate.ts';
 import type { DecisionProvider, JevRequest, JevResponse, Mutation } from '../src/types.ts';
 
 const config = () => parseConfig({ state: { b: 'evidence', a: 'other' }, model: 'jev-latest', questions: {
@@ -62,6 +63,39 @@ test('preflight budget violation and invalid run controls make no provider calls
   await assert.rejects(run(config(), provider, { baselineRuns: 1 }), /baseline/);
   await assert.rejects(run(config(), provider, { confirmRuns: 1 }), /confirm/);
   assert.equal(calls, 0);
+});
+test('direct run rejects non-JSON request values before invoking a provider', async () => {
+  let calls = 0;
+  const provider = new FakeProvider(r => { calls++; return answer(r, 'a'); });
+  for (const state of [new Date(), new Map([['x', 1]]), new Set([1]), new (class State { value = 1; })()]) {
+    const c = config();
+    c.cases[0]!.request.state = state as never;
+    await assert.rejects(run(c, provider, { seed: 1 }, [[]]), /JSON|invalid|request/i);
+  }
+  const c = config();
+  const bad = criterionOrderMutation(c, ['b', 'a', 'c']);
+  bad.request.state = new Map() as never;
+  await assert.rejects(run(c, provider, { seed: 1 }, [[bad]]), /JSON|invalid|request/i);
+  await assert.rejects(run(c, provider, { seed: 1 }, [[{ recipe: {} as Mutation['recipe'], idMap: {}, request: c.cases[0]!.request }]]), /mutation recipe/i);
+  await assert.rejects(run(c, provider, { seed: 1 }, [[{ ...criterionOrderMutation(c, ['b', 'a', 'c']), idMap: { ghost: 'q' } }]]), /mutation map/i);
+  const disguised = structuredClone(c.cases[0]!.request);
+  disguised.model = 'other'; disguised.state = { arbitrary: true };
+  await assert.rejects(run(c, provider, { seed: 1 }, [[{ recipe: { type: 'question_order', strategy: 'claimed', seed: 1 }, idMap: {}, request: disguised }]]), /declared decision content/i);
+  await assert.rejects(run(c, provider, { seed: 1 }, [[{ recipe: { type: 'question_order', strategy: 'claimed', seed: 1 }, idMap: {}, request: c.cases[0]!.request }]]), /declared decision content/i);
+  const reordered = structuredClone(c.cases[0]!.request);
+  reordered.questions = Object.fromEntries(Object.entries(reordered.questions).reverse());
+  await assert.rejects(run(c, provider, { seed: 1 }, [[{ recipe: { type: 'question_id_rename', strategy: 'claimed', seed: 1 }, idMap: { n: 'n', q: 'q' }, request: reordered }]]), /rename must change/i);
+  assert.equal(calls, 0);
+});
+test('prepared preflight accepts each generated, contract-preserving mutation class', async () => {
+  const c = parseConfig({ version: 1, name: 'prepared', cases: [{ id: 'one', request: {
+    state: { items: ['b', 'a'], note: 'two  spaces', meta: { b: 2, a: 1 } }, model: 'jev-latest',
+    questions: { q: { type: 'choice', instructions: 'choose', criteria: { a: 'A', b: 'B' } }, n: { type: 'noul', instructions: 'yes?' } },
+  }, mutations: { unorderedArrays: ['$.state.items'], irrelevantFields: [{ path: '$.state.meta', field: 'ignored', values: [null] }], prosePaths: ['$.state.note'] } }] });
+  const candidates = generateMutations(c.cases[0]!, 42);
+  assert.equal(new Set(candidates.map(candidate => candidate.recipe.type)).size, 7);
+  const report = await run(c, new FakeProvider(), { seed: 42, maxRequests: 1_000 }, [candidates]);
+  assert.equal(report.summary.mutations, candidates.length);
 });
 test('baseline stays sequential, workers obey concurrency, cancellation stops queue', async () => {
   let active = 0, peak = 0, count = 0;

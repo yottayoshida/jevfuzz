@@ -4,6 +4,7 @@ import { dirname, join, parse, resolve } from 'node:path';
 import { hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { assert, FuzzError } from './util.ts';
+import type { Json } from './types.ts';
 
 export const MAX_JSON_BYTES = 8 * 1024 * 1024;
 export const MAX_JSON_DEPTH = 64;
@@ -37,19 +38,59 @@ export class StorageQuota {
   }
 }
 
-export function boundedJson(value: unknown, maxDepth = MAX_JSON_DEPTH, maxNodes = 100_000): void {
-  const pending: [unknown, number][] = [[value, 0]];
+function safeReflection<T>(read: () => T): T {
+  try { return read(); } catch { throw new FuzzError('CONFIG', 'invalid JSON object'); }
+}
+export function canonicalJson(value: unknown, maxDepth = MAX_JSON_DEPTH, maxNodes = 100_000): Json {
+  const pending: { node: unknown; depth: number; parent?: Record<string, Json> | Json[]; key?: string | number }[] = [{ node: value, depth: 0 }];
   const seen = new Set<object>();
   let count = 0;
+  let root: Json = null;
   while (pending.length) {
-    const [node, depth] = pending.pop()!;
+    const { node, depth, parent, key } = pending.pop()!;
     assert(++count <= maxNodes && depth <= maxDepth, 'JSON structural limit exceeded');
+    let copy: Json;
     if (node && typeof node === 'object') {
       assert(!seen.has(node), 'JSON must not contain cycles or shared object references');
       seen.add(node);
-      for (const child of Object.values(node)) pending.push([child, depth + 1]);
-    } else assert(node === null || typeof node === 'string' || typeof node === 'boolean' || (typeof node === 'number' && Number.isFinite(node)), 'invalid JSON value');
+      const array = safeReflection(() => Array.isArray(node));
+      const prototype = safeReflection(() => Object.getPrototypeOf(node));
+      assert(prototype === (array ? Array.prototype : Object.prototype) || (!array && prototype === null), 'invalid JSON object');
+      const ownKeys = safeReflection(() => Reflect.ownKeys(node));
+      assert(ownKeys.length <= maxNodes, 'JSON structural limit exceeded');
+      if (array) {
+        const length = safeReflection(() => Object.getOwnPropertyDescriptor(node, 'length')?.value);
+        assert(Number.isSafeInteger(length) && length <= maxNodes - count && ownKeys.length === length + 1, 'JSON structural limit exceeded');
+        const result: Json[] = new Array(length);
+        copy = result;
+        for (let index = length - 1; index >= 0; index--) {
+          const descriptor = safeReflection(() => Object.getOwnPropertyDescriptor(node, String(index)));
+          assert(descriptor && Object.hasOwn(descriptor, 'value') && descriptor.enumerable, 'invalid JSON array');
+          pending.push({ node: descriptor.value, depth: depth + 1, parent: result, key: index });
+        }
+      } else {
+        const result: Record<string, Json> = prototype === null ? Object.create(null) : {};
+        copy = result;
+        for (let index = ownKeys.length - 1; index >= 0; index--) {
+          const name = ownKeys[index];
+          assert(typeof name === 'string', 'invalid JSON object');
+          const descriptor = safeReflection(() => Object.getOwnPropertyDescriptor(node, name));
+          assert(descriptor && Object.hasOwn(descriptor, 'value') && descriptor.enumerable, 'invalid JSON object');
+          pending.push({ node: descriptor.value, depth: depth + 1, parent: result, key: name });
+        }
+      }
+    } else {
+      assert(node === null || typeof node === 'string' || typeof node === 'boolean' || (typeof node === 'number' && Number.isFinite(node)), 'invalid JSON value');
+      copy = node as Json;
+    }
+    if (parent === undefined) root = copy;
+    else if (Array.isArray(parent)) parent[key as number] = copy;
+    else Object.defineProperty(parent, key as string, { value: copy, enumerable: true, writable: true, configurable: true });
   }
+  return root;
+}
+export function boundedJson(value: unknown, maxDepth = MAX_JSON_DEPTH, maxNodes = 100_000): void {
+  canonicalJson(value, maxDepth, maxNodes);
 }
 export function parseBoundedJson(text: string, maxBytes = MAX_JSON_BYTES): unknown {
   assert(Buffer.byteLength(text) <= maxBytes, 'JSON byte limit exceeded');
