@@ -49,9 +49,12 @@ does not count as a completed fix loop. Count only trials actually performed.
 | --- | --- | --- |
 | jev-intent-review | Opt-in `JEV_TRACE_FILE` records a normalized Jev request; `jevfuzz import` reads its supported trace format. | A real development task, its owner's relation review, and a usable application fix. Prior public synthetic dogfood does not count. |
 | jev-sscope | `buildState` and `askJev` construct the session-evaluation request. The history endpoint contains summaries, not a complete replayable request. | Owner-selected real session data and an explicit request export. No exporter or production change is implied by this protocol. |
-| Third workload | Not identified. | An actual application and decision owner; routing/filter examples are not evidence of a deployed workload. |
+| [Omi conversation relevance](https://github.com/BasedHardware/omi/blob/ba1f71d03cb4e3d1c333149bf2c7561f167e3909/backend/utils/conversations/relevance_jev.py) | The application defines a Noul `worth_keeping` question and a threshold-based keep/discard decision. Its [client](https://github.com/BasedHardware/omi/blob/ba1f71d03cb4e3d1c333149bf2c7561f167e3909/backend/utils/llm/jev_client.py) uses an OpenRouter-backed gateway. | The [deployment flag defaults off](https://github.com/BasedHardware/omi/blob/ba1f71d03cb4e3d1c333149bf2c7561f167e3909/backend/config/jev_decisions.py); deployed use, the exact request, owner-reviewed relations, and provider/model comparability are unverified. |
+| [Omi memory ownership](https://github.com/BasedHardware/omi/blob/ba1f71d03cb4e3d1c333149bf2c7561f167e3909/backend/utils/conversations/owner_jev.py) | A distinct application decision asks a Choice question and changes third-party attribution only when `P(user) >= 0.9`. | Its flag also defaults off. A real owner-controlled request and deployment evidence are needed; the public question definition or benchmark labels alone are not a completed pilot. |
 
-The two participants and the third workload must be evidenced before their
+A read-only search also found [Dub's malicious-link decision](https://github.com/dubinc/dub/blob/279ff7312f4369c2ef3f84a51a41eb1adaac4be8/apps/web/lib/api/links/malicious-link-check.ts), which asks a Boolean question through the AI SDK and applies `0.5` and `0.8` probability thresholds. The v0.9 JevFuzz contract is Choice/Noul/Score, so this is discovery evidence, not a runnable pilot or a reason to silently change its request semantics. Omi's two decisions are candidate families, not confirmed deployments or JevFuzz users.
+
+The two participants and a third completed workload must be evidenced before their
 acceptance rows can be completed. JevFuzz is already available as a self-service
 GitHub Action; its owner is not required to nominate participants or select their
 repositories. Public uses can be discovered and assessed, but a workflow file
