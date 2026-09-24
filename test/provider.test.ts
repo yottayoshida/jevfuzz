@@ -216,6 +216,19 @@ test('TypeSafeProvider normalizes away echoed fields and rejects a credential in
   const echoedModel = { ...response, model: 'secret-value' };
   const leakingProvider = new TypeSafeProvider({ TYPESAFE_API_KEY: 'secret-value' }, { fetch: async () => json(echoedModel) });
   await assert.rejects(leakingProvider.evaluate(request), /contains a credential/i);
+  for (const token of ['secret"value', 'secret\\value']) {
+    const escapedProvider = new TypeSafeProvider({ TYPESAFE_API_KEY: token }, {
+      fetch: async () => json({ ...response, model: `model-${token}` }),
+    });
+    await assert.rejects(escapedProvider.evaluate(request), /contains a credential/i);
+  }
+  const deeplyEscapedToken = 'secret"value';
+  let deeplyEscapedModel = deeplyEscapedToken;
+  for (let layer = 0; layer < 12; layer++) deeplyEscapedModel = JSON.stringify(deeplyEscapedModel);
+  const deeplyEscapedProvider = new TypeSafeProvider({ TYPESAFE_API_KEY: deeplyEscapedToken }, {
+    fetch: async () => json({ ...response, model: deeplyEscapedModel }),
+  });
+  await assert.rejects(deeplyEscapedProvider.evaluate(request), /contains a credential/i);
   assert.throws(() => new TypeSafeProvider({ TYPESAFE_API_KEY: 'has whitespace' }), /invalid TYPESAFE_API_KEY/i);
   assert.throws(() => new TypeSafeProvider({ TYPESAFE_API_KEY: ' private-key' }), /invalid TYPESAFE_API_KEY/i);
 });

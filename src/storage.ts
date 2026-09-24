@@ -99,9 +99,37 @@ export function parseBoundedJson(text: string, maxBytes = MAX_JSON_BYTES): unkno
   boundedJson(value);
   return value;
 }
-export function assertNoSecrets(text: string, secrets: readonly string[] = []): void {
-  const known = secrets.flatMap(value => [value, value.trim()]).filter(Boolean);
-  assert(!known.some(secret => text.includes(secret)), 'credential detected; refusing persistence');
+/** Check both semantic strings and their JSON encodings, including nested JSON strings. */
+export function hasSecrets(value: unknown, secrets: readonly string[] = []): boolean {
+  const known = [...new Set(secrets.flatMap(secret => [secret, secret.trim()]).filter(Boolean))];
+  if (!known.length) return false;
+  const matches = (text: string): boolean => known.some(secret => {
+    let encoded = secret;
+    while (encoded.length <= text.length) {
+      if (text.includes(encoded)) return true;
+      const next = JSON.stringify(encoded).slice(1, -1);
+      if (next.length <= encoded.length) return false;
+      encoded = next;
+    }
+    return false;
+  });
+  const pending: unknown[] = [value];
+  const seen = new Set<object>();
+  while (pending.length) {
+    const node = pending.pop();
+    if (typeof node === 'string') { if (matches(node)) return true; }
+    else if (node && typeof node === 'object' && !seen.has(node)) {
+      seen.add(node);
+      for (const [key, child] of Object.entries(node)) {
+        if (matches(key)) return true;
+        pending.push(child);
+      }
+    }
+  }
+  return false;
+}
+export function assertNoSecrets(value: unknown, secrets: readonly string[] = []): void {
+  assert(!hasSecrets(value, secrets), 'credential detected; refusing persistence');
 }
 
 /** Fixed macOS aliases are resolved before validating caller-controlled components. */

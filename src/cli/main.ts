@@ -8,7 +8,7 @@ import { exitCode, options, plan, run, RunInterruptedError } from '../runner.ts'
 import { importTrace, loadFailure, renderText, replay, saveArtifacts } from '../artifacts.ts';
 import type { DecisionProvider, FuzzConfig, FuzzReport, RunOptions } from '../types.ts';
 import { assert, FuzzError } from '../util.ts';
-import { readJson } from '../storage.ts';
+import { hasSecrets, readJson } from '../storage.ts';
 import { mainV2 } from './v2.ts';
 import { TOOL_VERSION } from '../version.ts';
 
@@ -124,8 +124,7 @@ export async function main(argv: string[], supplied: Partial<CliIO> = {}): Promi
       if (!flags.json && !flags.quiet) stderr(`seed: ${resolved.seed}; planned at most ${budget.worstCaseRequests} logical requests\n`);
       result = await completedOrInterrupted(run(config, createProvider(), resolved));
     }
-    const serialized = JSON.stringify(result);
-    assert(!secrets.some(s => serialized.includes(s)), 'credential detected in result; refusing persistence');
+    assert(!hasSecrets(result, secrets), 'credential detected in result; refusing persistence');
     const dir = await saveArtifacts(result, flags['artifacts-dir'] ?? '.jevfuzz', !flags['no-save-payloads'], providerName);
     output(result, `${renderText(result, { directory: dir, savePayloads: !flags['no-save-payloads'], replayProvider: providerName })}\nartifacts: ${dir}${flags['no-save-payloads'] ? ' (hashes/summary only; replay unavailable)' : ''}`);
     if (result.run.status === 'incomplete') stderr(`ERROR ${result.run.error?.code ?? 'RUN_INTERRUPTED'}: run incomplete; partial artifacts: ${dir}\n`);

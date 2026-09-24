@@ -171,3 +171,19 @@ test('report readers reject unknown JSON in both plain and JSON output modes', a
     }
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test('v2 inspect refuses a credential in validated input before printing it', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'jevfuzz-v2-escaped-secret-'));
+  try {
+    const token = 'secret"value';
+    const file = await findingFile(root, token);
+    let stdout = '', stderr = '';
+    const code = await main(['inspect', file, '--json'], {
+      env: { TYPESAFE_API_KEY: token },
+      stdout: text => { stdout += text; }, stderr: text => { stderr += text; },
+    });
+    assert.equal(code, 2);
+    assert.equal(stdout, '');
+    assert.doesNotMatch(stderr, /secret/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

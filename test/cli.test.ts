@@ -105,3 +105,22 @@ test('trimmed credentials in inputs never reach report files or output', async (
     await assert.rejects(readdir(artifacts));
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+test('JSON-escaped credentials in inputs are refused before artifact creation', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'jevfuzz-escaped-secret-'));
+  try {
+    for (const [index, token] of ['secret"value', 'secret\\value'].entries()) {
+      const file = join(directory, `input-${index}.json`);
+      const artifacts = join(directory, `artifacts-${index}`);
+      await writeFile(file, JSON.stringify({ state: token, model: 'jev-latest', questions: { q: { type: 'noul', instructions: 'x' } } }));
+      let output = '';
+      const code = await main(['run', file, '--artifacts-dir', artifacts, '--json'], {
+        env: { TYPESAFE_API_KEY: token }, provider: new FakeProvider(),
+        stdout: s => { output += s; }, stderr: s => { output += s; },
+      });
+      assert.equal(code, 2);
+      assert.doesNotMatch(output, /secret/);
+      await assert.rejects(readdir(artifacts));
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { DecisionProvider, EvaluateOptions, JevAnswer, JevRequest, JevResponse, ProviderCapabilities } from './types.ts';
 import { FuzzError, record, rng } from './util.ts';
 import { validateRequest } from './config.ts';
-import { canonicalJson, parseBoundedJson } from './storage.ts';
+import { canonicalJson, hasSecrets, parseBoundedJson } from './storage.ts';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 const DEFAULT_TYPESAFE_HOST = 'https://api.typesafe.ai';
@@ -301,7 +301,7 @@ abstract class HttpProvider implements DecisionProvider {
           throw responseError();
         }
         const normalized = validateResponse(this.unpack(raw), request);
-        if (JSON.stringify(normalized).includes(this.#token)) throw providerError('PROVIDER_RESPONSE', 'provider response contains a credential');
+        if (hasSecrets(normalized, [this.#token])) throw providerError('PROVIDER_RESPONSE', 'provider response contains a credential');
         await settle('known'); try { await options.observedMetadata?.({ cache: this.observedCache(response) }); } catch (error) { throw hookError(error, 'PERSISTENCE_ERROR'); }
         return normalized;
       } catch (error) {
