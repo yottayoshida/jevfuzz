@@ -142,21 +142,39 @@ Per-question `invariants` supports `type` (`choice_stable`, `noul_stable`,
 
 ## Artifacts and replay
 
+Legacy `plan` and `run` require exactly one requested model across all input
+cases. Mixed-model inputs fail before any provider call; a change in the
+observed model during a single-model run remains inconclusive.
+
 `.jevfuzz/runs/<run-id>/` contains `manifest.json`, `report.json`, `report.txt`,
 and independently replayable `failures/F001.json` files. JSON report version 1 is
 the public contract. It records versions, seed, hashes, requested/observed models,
 thresholds, baseline/mutation/confirmation answers, usage, and request counts.
 
-Artifacts stay local. New directories use 0700, files 0600 where supported, and
-symlinks/overwrites are refused. **Full artifacts may contain private source and
-prompts.** File permissions do not prevent the same user from committing them;
-keep `.jevfuzz/` ignored. `--no-save-payloads` persists hashes and summaries only,
+Artifacts stay local. Caller-controlled symlink components are rejected (the
+fixed macOS `/var` system alias is allowed), run directories are reserved with
+exclusive `mkdir`, and files use exclusive create. On POSIX, new directories
+use 0700 and files 0600. Existing ancestors must be owned by the caller or
+root; group/world-writable ancestors without the sticky bit are rejected.
+These checks do not inspect POSIX ACLs and assume
+another process with the same user ID cannot replace a checked path during a
+run. **Full artifacts may contain private source and prompts.** File permissions
+do not prevent the same user from committing them; keep `.jevfuzz/` ignored.
+On Windows, place `--artifacts-dir` or v2 `storage.directory` in an ACL-private
+directory controlled by the caller. Node does not validate those ACLs here or
+fsync directory entries;
+file contents are synced before publication. Do not use a shared writable
+directory for sensitive artifacts.
+`--no-save-payloads` persists hashes and summaries only,
 and disables replay. A runtime error or cancellation saves a partial report with
 `run.status: "incomplete"` and `manifest.complete: false`, then exits 2. Validated
 answers and exact HTTP retry counts survive the interruption; unfinished
 confirmations never become failure artifacts. Library callers can catch
 `RunInterruptedError` and read its `report`. Custom providers must honor the
 supplied abort signal so in-flight work can settle before persistence.
+Run directory names are reserved exclusively and `manifest.json` is written
+last; a process crash while writing can leave a private directory with no
+manifest, which is not a complete artifact.
 Replay uses your current provider configuration and rechecks its request budget;
 historical answers are never treated as truth.
 

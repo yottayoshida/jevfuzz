@@ -1,7 +1,7 @@
 import { parseArgs } from 'node:util';
 import { dirname, join } from 'node:path';
 import { lstat } from 'node:fs/promises';
-import { readJson, privateDir, writePrivate, recoverWriterLock } from '../storage.ts';
+import { assertNoSecrets, readJson, privateDir, writePrivate, recoverWriterLock } from '../storage.ts';
 import { loadCampaign } from '../campaign-config.ts';
 import { campaign, campaignExitCode, campaignSummary, planCampaign } from '../engine/campaign.ts';
 import * as campaignModule from '../engine/campaign.ts';
@@ -71,6 +71,7 @@ export async function mainV2(argv: string[], io: V2CliIO): Promise<number> {
   const secrets = [...new Set([io.env.TYPESAFE_API_KEY, io.env.CLOUDFLARE_API_TOKEN].flatMap(v => v ? [v, v.trim()] : []).filter(Boolean))];
   const clean = (text: string) => secrets.reduce((result, secret) => result.split(secret).join('[REDACTED]'), text);
   const out = (data: unknown, flags: Record<string, string | boolean | undefined>) => {
+    assertNoSecrets(data, secrets);
     let text: string;
     if (flags.json === true) text = `${JSON.stringify(data, null, 2)}\n`;
     else if (value(flags, 'format') === 'html') text = renderReportHtml(data);
@@ -79,6 +80,7 @@ export async function mainV2(argv: string[], io: V2CliIO): Promise<number> {
       try { text = `${renderReportText(data)}\n`; }
       catch { text = `${JSON.stringify(data, null, 2)}\n`; }
     }
+    assertNoSecrets(text, secrets);
     io.stdout(clean(text));
   };
   const persist = async (data: unknown, flags: Record<string, string | boolean | undefined>) => {

@@ -37,6 +37,8 @@ globalThis.fetch = async (url, init = {}) => {
   if (headers.get('cache-control') !== 'no-cache, no-store') fail('cache control');
   if ((provider === 'cloudflare') !== headers.has('cf-aig-skip-cache')) fail('cf-aig-skip-cache presence');
   if (provider === 'cloudflare' && headers.get('cf-aig-skip-cache') !== 'true') fail('cf-aig-skip-cache value');
+  if ((provider === 'cloudflare') !== headers.has('cf-aig-max-attempts')) fail('cf-aig-max-attempts presence');
+  if (provider === 'cloudflare' && headers.get('cf-aig-max-attempts') !== '1') fail('cf-aig-max-attempts value');
   const request = provider === 'cloudflare' ? payload.input : payload;
   if (!request || typeof request !== 'object' || !request.state || !request.questions) fail('request shape');
   if (provider === 'typesafe') {
@@ -80,10 +82,15 @@ async function filesUnder(directory: string): Promise<string[]> {
   return nested.flat();
 }
 
-async function verifyProvider(provider: ProviderName, install: string, stub: string): Promise<ProviderResult> {
+async function verifyProvider(provider: ProviderName, install: string, stub: string, releaseVersion: string): Promise<ProviderResult> {
   const work = join(install, provider), trace = join(work, 'http.jsonl');
   await mkdir(work, { recursive: true, mode: 0o700 });
   const env = providerEnv(provider, trace), bin = join(install, 'node_modules', '.bin', 'jevfuzz');
+  const installed = JSON.parse(await readFile(join(install, 'node_modules', 'jevfuzz', 'package.json'), 'utf8')) as { version: string };
+  assert.equal(installed.version, releaseVersion, 'installed package version must match the source release version');
+  const help = await run(stub, [bin, '--help'], env, work);
+  assert.equal(help.exit, 0, 'packed CLI help must succeed');
+  assert.ok(help.stdout.startsWith(`JevFuzz ${releaseVersion} —`), 'packed CLI help must show the package version');
   const fixtureRoot = join(install, 'node_modules', 'jevfuzz', 'fixtures'), commands: string[] = [];
   const countCalls = async () => {
     try { return (await readFile(trace, 'utf8')).trim().split('\n').filter(Boolean).length; } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 0; throw error; }
@@ -107,7 +114,8 @@ async function verifyProvider(provider: ProviderName, install: string, stub: str
   const v1fixture = join(fixtureRoot, 'compat-v01', 'position-sensitive.jevfuzz.json');
   await command(['plan', v1fixture, '--seed', '7', ...providerArgs, '--json'], [0]);
   const artifacts = join(work, 'v1-artifacts');
-  await command(['run', v1fixture, '--seed', '7', '--baseline-runs', '2', '--confirm-runs', '2', '--concurrency', '1', '--artifacts-dir', artifacts, ...providerArgs, '--json'], [1], true);
+  const legacyRun = await command(['run', v1fixture, '--seed', '7', '--baseline-runs', '2', '--confirm-runs', '2', '--concurrency', '1', '--artifacts-dir', artifacts, ...providerArgs, '--json'], [1], true);
+  assert.equal((JSON.parse(legacyRun.stdout) as { run: { jevfuzzVersion: string } }).run.jevfuzzVersion, releaseVersion, 'packed report must show the package version');
   const v1runs = await readdir(join(artifacts, 'runs'));
   await command(['replay', join(artifacts, 'runs', v1runs[0]!, 'failures', 'F001.json'), '--concurrency', '1', '--max-requests', '100', ...providerArgs, '--json'], [1], true);
   const campaign = JSON.parse(await readFile(join(fixtureRoot, 'v2', 'routing.campaign.json'), 'utf8')) as Record<string, unknown>;
@@ -118,7 +126,8 @@ async function verifyProvider(provider: ProviderName, install: string, stub: str
   const campaignPath = join(work, 'campaign.json'); await writeFile(campaignPath, JSON.stringify(campaign));
   await command(['plan', campaignPath, ...providerArgs, '--json'], [0]);
   const fuzz = await command(['fuzz', campaignPath, ...providerArgs, '--json'], [1], true);
-  const report = JSON.parse(fuzz.stdout) as { status: string; directory?: string; findings: Array<{ id: string }> };
+  const report = JSON.parse(fuzz.stdout) as { status: string; toolVersion: string; directory?: string; findings: Array<{ id: string }> };
+  assert.equal(report.toolVersion, releaseVersion, 'packed v2 report must show the package version');
   assert.equal(report.status, 'complete'); assert.ok(report.directory); assert.ok(report.findings.length > 0, 'stub should create a v2 finding');
   const finding = join(report.directory!, 'findings', `${report.findings[0]!.id}.json`), replayOut = join(work, 'replay.json'), shrinkOut = join(work, 'shrink.json'); await readFile(finding, 'utf8');
   await command(['replay', finding, '--out', replayOut, ...providerArgs, '--json'], [1], true);
@@ -135,6 +144,7 @@ async function verifyProvider(provider: ProviderName, install: string, stub: str
 }
 
 async function main(): Promise<void> {
+  const releaseVersion = (JSON.parse(await readFile(join(root, 'package.json'), 'utf8')) as { version: string }).version;
   const temp = await mkdtemp(join(tmpdir(), 'jevfuzz-pack-')), packDestination = await mkdtemp(join(tmpdir(), 'jevfuzz-pack-tarball-'));
   try {
     const packed = await exec('npm', ['pack', '--json', '--pack-destination', packDestination], { cwd: root, maxBuffer: 32 * 1024 * 1024 });
@@ -144,7 +154,7 @@ async function main(): Promise<void> {
     const tarball = join(packDestination, filename), sha256 = createHash('sha256').update(await readFile(tarball)).digest('hex');
     await exec('npm', ['install', '--offline', '--ignore-scripts', '--omit=dev', tarball], { cwd: temp, maxBuffer: 32 * 1024 * 1024 });
     const stub = join(temp, 'http-stub.mjs'); await writeFile(stub, preload);
-    const results: ProviderResult[] = []; for (const provider of providers) results.push(await verifyProvider(provider, temp, stub));
+    const results: ProviderResult[] = []; for (const provider of providers) results.push(await verifyProvider(provider, temp, stub, releaseVersion));
     assert.ok(results.every(result => result.httpCalls > 0), 'each provider must receive intercepted observations');
     console.log(JSON.stringify({ node: process.version, tarball: filename, sha256, installedDependencies: 0, providers: results, httpCalls: results.reduce((total, result) => total + result.httpCalls, 0) }, null, 2));
   } finally { await rm(temp, { recursive: true, force: true }); await rm(packDestination, { recursive: true, force: true }); }

@@ -47,6 +47,22 @@ test('validateResponse accepts complete typed answers and rejects malformed dist
   delete missingModel.model;
   assert.throws(() => validateResponse(missingModel, request), { message: /actual model version/i });
 });
+test('providers reject non-JSON requests before fetch or handler dispatch', async () => {
+  let calls = 0;
+  const bad = { ...request, state: new Map([['secret', 'value']]) } as unknown as JevRequest;
+  const live = new TypeSafeProvider({ TYPESAFE_API_KEY: 'private-key' }, { fetch: async () => { calls++; return json(response); } });
+  const cloudflare = new CloudflareProvider({ CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32), CLOUDFLARE_API_TOKEN: 'private-key' }, { fetch: async () => { calls++; return json(response); } });
+  const fake = new FakeProvider(() => { calls++; return response; });
+  for (const provider of [live, cloudflare, fake]) await assert.rejects(provider.evaluate(bad), /request|JSON|invalid/i);
+  await assert.rejects(live.evaluate(request, { payload: JSON.stringify(bad) }), /invalid provider request/i);
+  assert.equal(calls, 0);
+  assert.throws(() => validateResponse({ ...response, answers: { ...response.answers, score: { ...response.answers.score, legend: new Map() } } }, request), /invalid provider response/i);
+  assert.throws(() => validateResponse({ model: 'm', answers: {}, usage: { input_tokens: 0, output_tokens: 0 } }, { ...request, questions: new Map() } as unknown as JevRequest), /invalid provider request/i);
+  let getterCalls = 0;
+  const getter = Object.defineProperty({ ...response }, 'model', { enumerable: true, get() { getterCalls++; return 'm'; } });
+  assert.throws(() => validateResponse(getter, request));
+  assert.equal(getterCalls, 0);
+});
 
 test('TypeSafeProvider retries 429 and 529, serializes the request once, and preserves payload identity', async () => {
   const calls: RequestInit[] = [];
@@ -70,6 +86,10 @@ test('TypeSafeProvider retries 429 and 529, serializes the request once, and pre
   assert.equal((calls[0]! as RequestInit & { cache: string }).cache, 'no-store');
   assert.equal((calls[0]!.headers as Record<string, string>)['Cache-Control'], 'no-cache, no-store');
   assert.equal((calls[0]!.headers as Record<string, string>).Authorization, 'Bearer private-key');
+  for (const call of calls) {
+    assert.equal(new Headers(call.headers).has('cf-aig-skip-cache'), false);
+    assert.equal(new Headers(call.headers).has('cf-aig-max-attempts'), false);
+  }
 });
 
 test('TypeSafeProvider makes no more than five actual attempts when a retryable response persists', async () => {
@@ -200,6 +220,19 @@ test('TypeSafeProvider normalizes away echoed fields and rejects a credential in
   const echoedModel = { ...response, model: 'secret-value' };
   const leakingProvider = new TypeSafeProvider({ TYPESAFE_API_KEY: 'secret-value' }, { fetch: async () => json(echoedModel) });
   await assert.rejects(leakingProvider.evaluate(request), /contains a credential/i);
+  for (const token of ['secret"value', 'secret\\value']) {
+    const escapedProvider = new TypeSafeProvider({ TYPESAFE_API_KEY: token }, {
+      fetch: async () => json({ ...response, model: `model-${token}` }),
+    });
+    await assert.rejects(escapedProvider.evaluate(request), /contains a credential/i);
+  }
+  const deeplyEscapedToken = 'secret"value';
+  let deeplyEscapedModel = deeplyEscapedToken;
+  for (let layer = 0; layer < 12; layer++) deeplyEscapedModel = JSON.stringify(deeplyEscapedModel);
+  const deeplyEscapedProvider = new TypeSafeProvider({ TYPESAFE_API_KEY: deeplyEscapedToken }, {
+    fetch: async () => json({ ...response, model: deeplyEscapedModel }),
+  });
+  await assert.rejects(deeplyEscapedProvider.evaluate(request), /contains a credential/i);
   assert.throws(() => new TypeSafeProvider({ TYPESAFE_API_KEY: 'has whitespace' }), /invalid TYPESAFE_API_KEY/i);
   assert.throws(() => new TypeSafeProvider({ TYPESAFE_API_KEY: ' private-key' }), /invalid TYPESAFE_API_KEY/i);
 });
@@ -261,7 +294,7 @@ test('CloudflareProvider uses the fixed Jev endpoint and refuses missing observe
   await assert.rejects(invalidModel.evaluate({ ...request, model: 'jev-1.13.0' }), /supports only jev-latest or typesafe\/jev/i);
 });
 
-test('CloudflareProvider sends the gateway skip-cache header on every retry', async () => {
+test('CloudflareProvider bypasses gateway cache and retries on every client attempt', async () => {
   const calls: RequestInit[] = [];
   const provider = new CloudflareProvider({ CLOUDFLARE_ACCOUNT_ID: 'c'.repeat(32), CLOUDFLARE_API_TOKEN: 'cf-secret' }, {
     fetch: async (_input, init) => {
@@ -272,7 +305,10 @@ test('CloudflareProvider sends the gateway skip-cache header on every retry', as
   });
   assert.deepEqual(await provider.evaluate(request), response);
   assert.equal(calls.length, 3);
-  for (const call of calls) assert.equal(new Headers(call.headers).get('cf-aig-skip-cache'), 'true');
+  for (const call of calls) {
+    assert.equal(new Headers(call.headers).get('cf-aig-skip-cache'), 'true');
+    assert.equal(new Headers(call.headers).get('cf-aig-max-attempts'), '1');
+  }
 });
 
 test('CloudflareProvider records only an explicit cache HIT and TypeSafe remains unknown', async () => {

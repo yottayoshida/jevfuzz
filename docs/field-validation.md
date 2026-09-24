@@ -15,6 +15,11 @@ exercise is not a participant pilot or the planned 20–50-seed evaluation.
 The actual app CLI was not claimed to have accepted the issue's heading format.
 All acceptance counts remain zero.
 
+On 2026-09-24, a read-only public GitHub code search for `jevfuzz@` returned
+no indexed workflow examples. Search coverage is incomplete, so this is not
+proof that no one uses the Action; it supplies no participant or usability
+observation to count.
+
 A second local preparation selected 20 existing private `jev-sscope` session
 states and reconstructed the historical four-question request definition from
 application commit `ec0164724c3e003ae55ffecd03854af783799e47`. The built planner
@@ -44,12 +49,19 @@ does not count as a completed fix loop. Count only trials actually performed.
 | --- | --- | --- |
 | jev-intent-review | Opt-in `JEV_TRACE_FILE` records a normalized Jev request; `jevfuzz import` reads its supported trace format. | A real development task, its owner's relation review, and a usable application fix. Prior public synthetic dogfood does not count. |
 | jev-sscope | `buildState` and `askJev` construct the session-evaluation request. The history endpoint contains summaries, not a complete replayable request. | Owner-selected real session data and an explicit request export. No exporter or production change is implied by this protocol. |
-| Third workload | Not identified. | An actual application and decision owner; routing/filter examples are not evidence of a deployed workload. |
+| [Neuronpedia explanation scoring](https://github.com/hijohnnylin/neuronpedia/blob/5a880652d1c5dfaaeeded718287aaca6976b4770/apps/webapp/app/api/explanation/score/route.tsx) | Its HTTP route reaches a [TypeSafe-direct Jev scorer](https://github.com/hijohnnylin/neuronpedia/blob/5a880652d1c5dfaaeeded718287aaca6976b4770/apps/webapp/lib/external/autointerp-scorer-jev.ts) with Noul and Score questions, thresholded detection, and persisted application scores. | Whether the route is deployed with a configured key, an owner-approved real request and relation, and any JevFuzz trial or user assessment remain unverified. No TypeSafe-direct live run is assumed. |
+| [Omi conversation relevance](https://github.com/BasedHardware/omi/blob/ba1f71d03cb4e3d1c333149bf2c7561f167e3909/backend/utils/conversations/relevance_jev.py) | The application defines a Noul `worth_keeping` question and a threshold-based keep/discard decision. Its [client](https://github.com/BasedHardware/omi/blob/ba1f71d03cb4e3d1c333149bf2c7561f167e3909/backend/utils/llm/jev_client.py) uses an OpenRouter-backed gateway. | The [deployment flag defaults off](https://github.com/BasedHardware/omi/blob/ba1f71d03cb4e3d1c333149bf2c7561f167e3909/backend/config/jev_decisions.py); deployed use, the exact request, owner-reviewed relations, and provider/model comparability are unverified. |
+| [Omi memory ownership](https://github.com/BasedHardware/omi/blob/ba1f71d03cb4e3d1c333149bf2c7561f167e3909/backend/utils/conversations/owner_jev.py) | A distinct application decision asks a Choice question and changes third-party attribution only when `P(user) >= 0.9`. | Its flag also defaults off. A real owner-controlled request and deployment evidence are needed; the public question definition or benchmark labels alone are not a completed pilot. |
 
-The two participants and the third workload must be identified before their
-acceptance rows can be completed. Recruiting or contacting people is a separate
-action requiring authorization. Provider keys and business payloads are never
-part of a public pilot record.
+A read-only search also found [Dub's malicious-link decision](https://github.com/dubinc/dub/blob/279ff7312f4369c2ef3f84a51a41eb1adaac4be8/apps/web/lib/api/links/malicious-link-check.ts), which asks a Boolean question through the AI SDK and applies `0.5` and `0.8` probability thresholds. The v0.9 JevFuzz contract is Choice/Noul/Score, so this is discovery evidence, not a runnable pilot or a reason to silently change its request semantics. Omi's two decisions are candidate families, not confirmed deployments or JevFuzz users.
+
+The two participants and a third completed workload must be evidenced before their
+acceptance rows can be completed. JevFuzz is already available as a self-service
+GitHub Action; its owner is not required to nominate participants or select their
+repositories. Public uses can be discovered and assessed, but a workflow file
+alone does not prove that another developer understood a result. Recruiting or
+contacting people is a separate action requiring authorization. Provider keys
+and business payloads are never part of a public pilot record.
 
 ## Per-workload procedure
 

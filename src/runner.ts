@@ -1,15 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { TOOL_VERSION } from './version.ts';
-import type { CaseReport, Comparison, DecisionProvider, FuzzConfig, FuzzReport, JevRequest, JevResponse, Mutation, MutationResult, RunOptions } from './types.ts';
+import type { CaseReport, Comparison, DecisionProvider, FuzzCase, FuzzConfig, FuzzReport, JevRequest, JevResponse, Mutation, MutationResult, RunOptions } from './types.ts';
 import { generateMutations } from './mutate.ts';
 import { compare, summarize } from './compare.ts';
-import { thresholds } from './config.ts';
+import { thresholds, validateFuzzConfig, validateRequest } from './config.ts';
+import { canonicalJson, hasSecrets } from './storage.ts';
 import { EvaluationBroker } from './engine/broker.ts';
 import { BudgetLedger } from './engine/budget.ts';
 import type { Phase } from './campaign-types.ts';
-import { assert, freshSeed, hash, integer, FuzzError } from './util.ts';
+import { assert, atPath, freshSeed, hash, integer, setPath, FuzzError } from './util.ts';
 
 const SAFE_ERROR_CODES = new Set(['BUDGET', 'CONFIG', 'PROVIDER_ABORTED', 'PROVIDER_CONFIG', 'PROVIDER_HTTP', 'PROVIDER_NETWORK', 'PROVIDER_REQUEST', 'PROVIDER_RESPONSE', 'PROVIDER_TIMEOUT']);
+const MUTATION_TYPES = new Set(['question_id_rename', 'question_order', 'choice_criteria_order', 'object_key_order', 'unordered_array_shuffle', 'irrelevant_field_injection', 'text_normalization']);
 
 /** A runtime failure with the fully sanitized report accumulated before it occurred. */
 export class RunInterruptedError extends FuzzError {
@@ -27,6 +29,7 @@ export function options(input: Partial<RunOptions> = {}): RunOptions {
   };
 }
 export function plan(config: FuzzConfig, opts: RunOptions, prepared?: Mutation[][]) {
+  assert(new Set(config.cases.map(c => c.request.model)).size === 1, 'a run requires exactly one requested model');
   const mutations = prepared ?? config.cases.map(c => generateMutations(c, opts.seed));
   const baselineRequests = config.cases.reduce((n, c) => n + (opts.baselineRuns ?? c.baselineRuns), 0);
   const mutationRequests = mutations.reduce((n, m) => n + m.length, 0);
@@ -48,10 +51,99 @@ function plannedMutationResult(caseIndex: number, mutationIndex: number, mutatio
   return { id: `M${caseIndex + 1}-${mutationIndex + 1}`, mutation: mutation.recipe, idMap: mutation.idMap, requestHash: hash(mutation.request), request: mutation.request, responses: [], comparisons: {} };
 }
 function safeErrorCode(error: unknown): string { return error instanceof FuzzError && SAFE_ERROR_CODES.has(error.code) ? error.code : 'RUN_INTERRUPTED'; }
+function sortedJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortedJson);
+  if (value !== null && typeof value === 'object') return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([key, child]) => [key, sortedJson(child)]));
+  return value;
+}
+function validatePreparedMutation(item: unknown, testCase: FuzzCase): Mutation {
+  const baseline = testCase.request;
+  assert(item !== null && typeof item === 'object' && !Array.isArray(item), 'invalid prepared mutation');
+  const mutation = item as Mutation;
+  const recipe = mutation.recipe as unknown as Record<string, unknown>;
+  assert(recipe !== null && typeof recipe === 'object' && !Array.isArray(recipe)
+    && MUTATION_TYPES.has(recipe.type as string) && typeof recipe.strategy === 'string' && recipe.strategy.length > 0
+    && Number.isSafeInteger(recipe.seed) && (recipe.seed as number) >= 0 && (recipe.seed as number) <= 0xffffffff, 'invalid mutation recipe');
+  const optionalFields = recipe.type === 'choice_criteria_order' ? ['question']
+    : recipe.type === 'irrelevant_field_injection' ? ['path', 'field', 'valueIndex']
+      : ['unordered_array_shuffle', 'text_normalization'].includes(recipe.type as string) ? ['path'] : [];
+  assert(Object.keys(recipe).every(key => ['type', 'strategy', 'seed', ...optionalFields].includes(key))
+    && ['question', 'path', 'field'].every(key => recipe[key] === undefined || typeof recipe[key] === 'string')
+    && (recipe.valueIndex === undefined || (Number.isSafeInteger(recipe.valueIndex) && (recipe.valueIndex as number) >= 0)), 'invalid mutation recipe');
+  assert(mutation.idMap !== null && typeof mutation.idMap === 'object' && !Array.isArray(mutation.idMap), 'invalid mutation map');
+  const request = validateRequest(mutation.request);
+  const baseIds = Object.keys(baseline.questions), changedIds = Object.keys(request.questions), mapped = Object.entries(mutation.idMap);
+  assert(mapped.length === 0 || (mapped.length === baseIds.length && mapped.length === changedIds.length
+    && mapped.every(([changed, original]) => typeof original === 'string' && Object.hasOwn(request.questions, changed) && Object.hasOwn(baseline.questions, original))
+    && new Set(mapped.map(([, original]) => original)).size === baseIds.length), 'invalid mutation map');
+  assert((recipe.type === 'question_id_rename' && mapped.length === baseIds.length)
+    || (recipe.type !== 'question_id_rename' && baseIds.length === changedIds.length && baseIds.every(id => Object.hasOwn(request.questions, id))
+      && mapped.every(([changed, original]) => changed === original)), 'invalid mutation map');
+  if (recipe.type === 'question_id_rename') {
+    assert(mapped.some(([changed, original]) => changed !== original), 'rename must change a question ID');
+    assert(JSON.stringify(changedIds.map(id => mutation.idMap[id])) === JSON.stringify(baseIds), 'rename must preserve question order');
+  }
+  assert(changedIds.every(id => request.questions[id]!.type === baseline.questions[mutation.idMap[id] ?? id]?.type), 'mutation question type changed');
+  if (recipe.type === 'choice_criteria_order') assert(typeof recipe.question === 'string' && baseline.questions[recipe.question]?.type === 'choice', 'invalid mutation recipe');
+  if (['unordered_array_shuffle', 'irrelevant_field_injection', 'text_normalization'].includes(recipe.type as string)) assert(typeof recipe.path === 'string', 'invalid mutation recipe');
+  if (recipe.type === 'irrelevant_field_injection') assert(typeof recipe.field === 'string' && Number.isSafeInteger(recipe.valueIndex) && (recipe.valueIndex as number) >= 0, 'invalid mutation recipe');
+  assert(request.model === baseline.model && JSON.stringify(request) !== JSON.stringify(baseline), 'mutation must change only declared decision content');
+  const expected = structuredClone(baseline);
+  if (recipe.type === 'question_id_rename') {
+    expected.questions = Object.fromEntries(changedIds.map(id => [id, baseline.questions[mutation.idMap[id]!]!]));
+  } else if (recipe.type === 'question_order') {
+    expected.questions = Object.fromEntries(changedIds.map(id => [id, baseline.questions[id]!]));
+  } else if (recipe.type === 'choice_criteria_order') {
+    const id = recipe.question as string, target = request.questions[id];
+    assert(target?.type === 'choice', 'invalid mutation recipe');
+    const source = expected.questions[id]!;
+    assert(source.type === 'choice' && Object.keys(target.criteria).length === Object.keys(source.criteria).length
+      && Object.keys(target.criteria).every(key => Object.hasOwn(source.criteria, key)), 'invalid mutation recipe');
+    source.criteria = Object.fromEntries(Object.keys(target.criteria).map(key => [key, source.criteria[key]!]));
+  } else if (recipe.type === 'object_key_order') {
+    assert(JSON.stringify(Object.keys(request.questions)) === JSON.stringify(Object.keys(baseline.questions)), 'invalid object-key mutation');
+    for (const id of baseIds) {
+      const original = baseline.questions[id]!, changed = request.questions[id]!;
+      if (original.type === 'choice' && changed.type === 'choice') assert(JSON.stringify(Object.keys(original.criteria)) === JSON.stringify(Object.keys(changed.criteria)), 'invalid object-key mutation');
+    }
+    assert(JSON.stringify(sortedJson(expected)) === JSON.stringify(sortedJson(request)), 'invalid object-key mutation');
+  } else if (recipe.type === 'unordered_array_shuffle') {
+    const path = recipe.path as string;
+    assert(testCase.mutations.unorderedArrays.includes(path), 'undeclared array mutation');
+    const original = atPath(baseline, path), changed = atPath(request, path);
+    assert(Array.isArray(original) && Array.isArray(changed) && original.length === changed.length
+      && original.map(value => JSON.stringify(value)).sort().join('\u0000') === changed.map(value => JSON.stringify(value)).sort().join('\u0000'), 'invalid array mutation');
+    setPath(expected, path, changed);
+  } else if (recipe.type === 'irrelevant_field_injection') {
+    const path = recipe.path as string, field = recipe.field as string, index = recipe.valueIndex as number;
+    const declaration = testCase.mutations.irrelevantFields.find(entry => entry.path === path && entry.field === field);
+    assert(declaration && index < declaration.values.length, 'undeclared field mutation');
+    Object.defineProperty(atPath(expected, path), field, { value: declaration.values[index], enumerable: true, configurable: true, writable: true });
+  } else if (recipe.type === 'text_normalization') {
+    const path = recipe.path as string;
+    assert(testCase.mutations.prosePaths.includes(path), 'undeclared prose mutation');
+    const original = atPath(baseline, path), changed = atPath(request, path);
+    assert(typeof original === 'string' && typeof changed === 'string', 'invalid prose mutation');
+    const transforms = [original.replace(/\r\n/g, '\n'), original.replace(/\r?\n/g, '\r\n'), `${original.replace(/(?:\r?\n)+$/, '')}\n`, original.trim(), original.replace(/ {2,}/g, ' ')];
+    assert(transforms.includes(changed), 'invalid prose mutation');
+    setPath(expected, path, changed);
+  }
+  if (recipe.type !== 'object_key_order') assert(JSON.stringify(expected) === JSON.stringify(request), 'mutation does not match its declared operator');
+  return { recipe: mutation.recipe, idMap: mutation.idMap, request };
+}
 
-export async function run(config: FuzzConfig, provider: DecisionProvider, input: Partial<RunOptions> = {}, prepared?: Mutation[][]): Promise<FuzzReport> {
+export async function run(config: FuzzConfig, provider: DecisionProvider, input: Partial<RunOptions> = {}, prepared?: Mutation[][], secrets: readonly string[] = []): Promise<FuzzReport> {
+  config = validateFuzzConfig(config);
+  assert(!hasSecrets(config, secrets), 'credential detected in request input; refusing provider dispatch');
+  if (prepared !== undefined) {
+    const clean = canonicalJson(prepared);
+    assert(!hasSecrets(clean, secrets), 'credential detected in prepared mutation; refusing provider dispatch');
+    assert(Array.isArray(clean) && clean.length === config.cases.length && clean.every(Array.isArray), 'invalid prepared mutations');
+    prepared = clean.map((list, index) => (list as unknown[]).map(item => validatePreparedMutation(item, config.cases[index]!)));
+  }
   const opts = options(input);
   const mutations = prepared ?? config.cases.map(c => generateMutations(c, opts.seed));
+  assert(!hasSecrets(mutations, secrets), 'credential detected in mutation; refusing provider dispatch');
   const budget = plan(config, opts, mutations);
   if (!budget.withinBudget) throw new FuzzError('BUDGET', `request budget exceeded: planned worst case ${budget.worstCaseRequests}, --max-requests ${opts.maxRequests}`);
   const startAttempts = provider.httpAttempts ?? 0, startRetries = provider.httpRetries;
@@ -74,7 +166,7 @@ export async function run(config: FuzzConfig, provider: DecisionProvider, input:
   const ledger = new BudgetLedger({ logicalRequests: opts.maxRequests, httpAttempts: opts.maxRequests * 5, wallTimeSeconds: 86_400,
     discoveryRequests: budget.baselineRequests + budget.mutationRequests, confirmationRequests: budget.maximumConfirmationRequests,
     shrinkRequests: 0, finalConfirmationRequests: 0 });
-  const broker = new EvaluationBroker(provider, ledger, { signal, strict: false });
+  const broker = new EvaluationBroker(provider, ledger, { signal, strict: false, secrets: [...secrets] });
   const evaluate = async (request: JevRequest, phase: Phase = 'discovery'): Promise<JevResponse> => {
     signal.throwIfAborted();
     if (report.summary.logicalRequests >= opts.maxRequests) throw new FuzzError('BUDGET', 'logical request limit reached');

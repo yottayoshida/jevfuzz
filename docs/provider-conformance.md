@@ -89,12 +89,30 @@ remains unverified; fixed-stat confirmation is still refused by both HTTP adapte
 
 ## Cache evidence boundary
 
-Cloudflare requests include `cf-aig-skip-cache: true` on every HTTP attempt.
+Cloudflare requests include `cf-aig-skip-cache: true` and
+`cf-aig-max-attempts: 1` on every client HTTP attempt. The latter requests that
+AI Gateway make only one upstream attempt, so gateway retries should not be
+hidden inside a JevFuzz attempt, per [Cloudflare's request-handling documentation](https://developers.cloudflare.com/ai-gateway/configuration/request-handling/).
+It may expose upstream 5xx responses that a
+gateway retry would previously have masked. Origin-side retries, deduplication,
+or a timed-out request remain unverified; the header was checked offline in the
+current package but has not been rechecked against live Cloudflare.
 Only a trimmed, case-insensitive `cf-aig-cache-status: HIT` response records
 `cached`; `MISS`, missing, and unrecognized values record `unknown`. This is
 observation metadata, not freshness or origin-independence evidence:
 `cacheMetadata` remains false for both HTTP adapters and `fixed-stat-v1` remains
 refused.
+
+The current branch was rechecked against live Cloudflare on 2026-09-24 with
+`JEVFUZZ_LIVE_PROVIDER=cloudflare node --env-file=<private-env> scripts/live-smoke.ts`
+at commit `928ff41`. The public synthetic fixture produced six passing
+comparisons, six logical requests, six client HTTP attempts, and zero client
+retries; the observed model was `jev-1.13.0`. The provider source SHA-256 was
+`3cc58369e97cd3d070f430ddab1e27ec54c8d3d35da7e9b7c131dd6e0fe22d41`.
+The private run artifact is ignored by Git. This shows the endpoint accepted
+the current adapter requests; it does not establish that the gateway honored
+the retry header, that the origin performed six fresh independent inferences,
+or that fixed-stat confirmation is available.
 
 The header is documented for the existing endpoint in Cloudflare's
 [REST API](https://developers.cloudflare.com/ai-gateway/usage/rest-api/) and

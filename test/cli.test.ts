@@ -6,6 +6,17 @@ import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { main } from '../src/cli/main.ts';
 import { FakeProvider } from '../src/provider.ts';
+import { TOOL_VERSION } from '../src/version.ts';
+
+test('CLI help and run report use the package release version', async () => {
+  const release = JSON.parse(await readFile('package.json', 'utf8')) as { version: string };
+  assert.equal(TOOL_VERSION, release.version);
+  let help = '';
+  assert.equal(await main(['--help'], { stdout: value => { help += value; }, stderr: () => {}, env: {} }), 0);
+  assert.ok(help.startsWith(`JevFuzz ${release.version} —`));
+  const report = await (await import('../src/runner.ts')).run(await (await import('../src/config.ts')).loadConfig('fixtures/live-smoke.jevfuzz.json'), new FakeProvider(), { seed: 42 });
+  assert.equal(report.run.jevfuzzVersion, release.version);
+});
 
 test('CLI plan and doctor perform zero fetch calls and never print a key', async () => {
   let calls = 0, stdout = '', stderr = '';
@@ -97,11 +108,76 @@ test('trimmed credentials in inputs never reach report files or output', async (
   try {
     const file = join(directory, 'input.json');
     await writeFile(file, JSON.stringify({ state: 'secret-to-filter', model: 'jev-latest', questions: { q: { type: 'noul', instructions: 'x' } } }));
-    let output = '';
+    let output = '', calls = 0;
+    const provider = { async evaluate() { calls++; throw new Error('credential reached provider'); } };
     const artifacts = join(directory, 'artifacts');
-    const code = await main(['run', file, '--artifacts-dir', artifacts, '--json'], { env: { TYPESAFE_API_KEY: '  secret-to-filter  ' }, provider: new FakeProvider(), stdout: s => output += s, stderr: s => output += s });
+    const code = await main(['run', file, '--artifacts-dir', artifacts, '--json'], { env: { TYPESAFE_API_KEY: '  secret-to-filter  ' }, provider, stdout: s => output += s, stderr: s => output += s });
     assert.equal(code, 2);
+    assert.equal(calls, 0);
     assert.doesNotMatch(output, /secret-to-filter/);
     await assert.rejects(readdir(artifacts));
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('JSON-escaped credentials in inputs are refused before artifact creation', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'jevfuzz-escaped-secret-'));
+  try {
+    for (const [index, token] of ['secret"value', 'secret\\value'].entries()) {
+      const file = join(directory, `input-${index}.json`);
+      const artifacts = join(directory, `artifacts-${index}`);
+      await writeFile(file, JSON.stringify({ state: token, model: 'jev-latest', questions: { q: { type: 'noul', instructions: 'x' } } }));
+      let output = '', calls = 0;
+      const provider = { async evaluate() { calls++; throw new Error('credential reached provider'); } };
+      const code = await main(['run', file, '--artifacts-dir', artifacts, '--json'], {
+        env: { TYPESAFE_API_KEY: token }, provider,
+        stdout: s => { output += s; }, stderr: s => { output += s; },
+      });
+      assert.equal(code, 2);
+      assert.equal(calls, 0);
+      assert.doesNotMatch(output, /secret/);
+      await assert.rejects(readdir(artifacts));
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('v1 replay rejects credential-bearing requests before provider dispatch', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'jevfuzz-replay-secret-'));
+  try {
+    const token = 'secret"replay';
+    const artifact = JSON.parse(await readFile('fixtures/compat-v01/failure.json', 'utf8'));
+    artifact.baselineRequest.state = token;
+    artifact.mutatedRequest.state = token;
+    delete artifact.baselineRequestHash;
+    delete artifact.mutatedRequestHash;
+    const file = join(directory, 'failure.json');
+    const artifacts = join(directory, 'artifacts');
+    await writeFile(file, JSON.stringify(artifact));
+    let calls = 0, output = '';
+    const provider = { async evaluate() { calls++; throw new Error('credential reached provider'); } };
+    const code = await main(['replay', file, '--artifacts-dir', artifacts, '--json'], {
+      env: { TYPESAFE_API_KEY: token }, provider,
+      stdout: s => { output += s; }, stderr: s => { output += s; },
+    });
+    assert.equal(code, 2);
+    assert.equal(calls, 0);
+    assert.doesNotMatch(output, /secret/);
+    await assert.rejects(readdir(artifacts));
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('v1 trace import refuses a credential-bearing request before creating files', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'jevfuzz-import-secret-'));
+  try {
+    const token = 'secret-to-import';
+    const file = join(directory, 'trace.jsonl');
+    const outputDirectory = join(directory, 'imported');
+    await writeFile(file, `${JSON.stringify({ version: 1, source: 'jev-intent-review', timestamp: '2026-09-24T00:00:00Z', request: { state: token, model: 'jev-latest', questions: { q: { type: 'noul', instructions: 'judge' } } }, response: {} })}\n`);
+    let output = '';
+    const code = await main(['import', file, '--out', outputDirectory], {
+      env: { TYPESAFE_API_KEY: token }, stdout: s => { output += s; }, stderr: s => { output += s; },
+    });
+    assert.equal(code, 2);
+    assert.doesNotMatch(output, /secret-to-import/);
+    await assert.rejects(readdir(outputDirectory));
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

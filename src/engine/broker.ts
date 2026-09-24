@@ -6,7 +6,7 @@ import { FakeProvider, validateResponse } from '../provider.ts';
 import { BudgetLedger } from './budget.ts';
 import { FuzzError } from '../util.ts';
 import { wireHash } from '../identity.ts';
-import { parseBoundedJson } from '../storage.ts';
+import { hasSecrets, parseBoundedJson } from '../storage.ts';
 
 export interface ExecutionJournal { append(type: string, data: unknown): Promise<void> }
 export interface BrokerOptions { journal?: ExecutionJournal; signal?: AbortSignal; providerName?: string; secrets?: string[]; strict?: boolean; maxPayloadBytes?: number; priorModels?: string[]; priorUsage?: { inputTokens: number; outputTokens: number } }
@@ -63,7 +63,7 @@ export class EvaluationBroker {
         },
         observedMetadata: async metadata => { cache = metadata.cache; },
       }), request);
-      this.assertNoSecrets(JSON.stringify(response));
+      this.assertNoSecrets(response);
       const observation: Observation = { id: randomUUID(), operationId, phase, wireHash: engineWireHash, ...(transportWireHash ? { transportWireHash } : {}), ...(transportUncertain ? { transportUncertain: true } : {}), response, provider: this.#options.providerName ?? this.#provider.capabilities?.adapterId ?? this.#provider.mode ?? 'custom', observedModel: response.model, cache };
       await this.event('observation', { operationId, observation });
       if (this.#ledger) { this.#ledger.settle(logicalId, 'known'); logicalSettled = true; await this.event('settled', { operationId, attemptId: logicalId, phase, kind: 'logical', outcome: 'known' }); }
@@ -83,5 +83,5 @@ export class EvaluationBroker {
     }
   }
   async event(type: string, data: unknown): Promise<void> { await this.#options.journal?.append(type, { ...(data as Record<string, unknown>), elapsedMs: this.#ledger?.elapsedMs ?? 0 }); }
-  private assertNoSecrets(value: string): void { for (const secret of this.#options.secrets ?? []) if (secret && value.includes(secret)) throw new FuzzError('CONFIG', 'secret-bearing broker data is forbidden'); }
+  private assertNoSecrets(value: unknown): void { if (hasSecrets(value, this.#options.secrets)) throw new FuzzError('CONFIG', 'secret-bearing broker data is forbidden'); }
 }

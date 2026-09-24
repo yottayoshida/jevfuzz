@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, lstat, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, lstat, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, win32 } from 'node:path';
 import test from 'node:test';
 
 import { importTrace, loadFailure, renderText, replay, saveArtifacts } from '../src/artifacts.ts';
 import { loadConfig } from '../src/config.ts';
 import { FakeProvider } from '../src/provider.ts';
-import { run } from '../src/runner.ts';
+import { run, RunInterruptedError } from '../src/runner.ts';
 import { TOOL_VERSION } from '../src/version.ts';
+import { FuzzError } from '../src/util.ts';
+import { assertSafePath, pathComponents, privateDir, writePrivate } from '../src/storage.ts';
 import type { FailureArtifact, FuzzConfig, JevRequest } from '../src/types.ts';
 
 const request: JevRequest = { state: { trace: 'private' }, model: 'jev-test', questions: { decision: { type: 'choice', instructions: 'private instructions', criteria: { yes: 'yes', no: 'no' } } } };
@@ -16,13 +18,28 @@ const config: FuzzConfig = { version: 1, name: 'artifact-case', cases: [{ id: 'a
 
 async function directory(): Promise<string> { return mkdtemp(join(tmpdir(), 'jevfuzz-artifacts-')); }
 
+test('direct v1 replay rejects a known credential before an incomplete report or provider call', async () => {
+  const secret = 'direct\\secret';
+  const artifact = await loadFailure('fixtures/compat-v01/failure.json');
+  artifact.baselineRequest.state = secret;
+  artifact.mutatedRequest.state = secret;
+  delete artifact.baselineRequestHash;
+  delete artifact.mutatedRequestHash;
+  let calls = 0;
+  const provider = { async evaluate() { calls++; throw new Error('provider reached'); } };
+  await assert.rejects(replay(artifact, provider, {}, [secret]), (error: unknown) => error instanceof FuzzError && error.code === 'CONFIG' && !(error instanceof RunInterruptedError));
+  assert.equal(calls, 0);
+});
+
 test('saveArtifacts creates private complete reports and human text', async () => {
   const root = await directory();
   try {
     const report = await run(config, new FakeProvider(), { seed: 1, confirmRuns: 2, concurrency: 1, maxRequests: 100 });
     const saved = await saveArtifacts(report, root);
-    assert.equal((await lstat(saved)).mode & 0o777, 0o700);
-    assert.equal((await lstat(join(saved, 'report.json'))).mode & 0o777, 0o600);
+    if (process.platform !== 'win32') {
+      assert.equal((await lstat(saved)).mode & 0o777, 0o700);
+      assert.equal((await lstat(join(saved, 'report.json'))).mode & 0o777, 0o600);
+    }
     assert.ok((await readFile(join(saved, 'report.txt'), 'utf8')).includes(`JevFuzz ${TOOL_VERSION}`));
     assert.match(renderText(report), /baseline stable/);
     const display = structuredClone(report);
@@ -52,14 +69,93 @@ test('hash-only artifacts omit payloads and never create replay files', async ()
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test('artifact path traversal includes every Windows drive and UNC component', () => {
+  const driveRoot = 'C:\\';
+  const drive = win32.join(driveRoot, 'Users', 'alice', 'runs');
+  assert.deepEqual(pathComponents(drive, win32), [
+    win32.join(driveRoot, 'Users'),
+    win32.join(driveRoot, 'Users', 'alice'),
+    drive,
+  ]);
+  const shareRoot = '\\\\server\\share\\';
+  const unc = win32.join(shareRoot, 'folder', 'runs');
+  assert.deepEqual(pathComponents(unc, win32), [
+    win32.join(shareRoot, 'folder'),
+    unc,
+  ]);
+});
+
 test('artifact directories reject symlink components', async () => {
   const root = await directory();
   const target = await directory();
   try {
-    await symlink(target, join(root, 'linked'));
+    await symlink(target, join(root, 'linked'), process.platform === 'win32' ? 'junction' : 'dir');
     const report = await run(config, new FakeProvider(), { seed: 1, confirmRuns: 2, concurrency: 1, maxRequests: 100 });
     await assert.rejects(saveArtifacts(report, join(root, 'linked')), /symbolic-link|symlink/i);
+    await assert.rejects(assertSafePath(join(root, 'linked', 'child')), /symbolic links/i);
   } finally { await rm(root, { recursive: true, force: true }); await rm(target, { recursive: true, force: true }); }
+});
+
+test('nested artifact storage refuses non-directories and existing runs', async () => {
+  const root = await directory();
+  try {
+    const report = await run(config, new FakeProvider(), { seed: 1, confirmRuns: 2, concurrency: 1, maxRequests: 100 });
+    const nested = join(root, 'nested', 'private');
+    const saved = await saveArtifacts(report, nested);
+    assert.equal((await lstat(saved)).isDirectory(), true);
+    await assert.rejects(saveArtifacts(report, nested), /already exists/i);
+    await writeFile(join(root, 'ordinary-file'), 'x');
+    await assert.rejects(saveArtifacts(report, join(root, 'ordinary-file', 'child')), /not a directory/i);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('concurrent saves of one run ID cannot both publish or overwrite', async () => {
+  const root = await directory();
+  try {
+    const report = await run(config, new FakeProvider(), { seed: 1, confirmRuns: 2, concurrency: 1, maxRequests: 100 });
+    const outcomes = await Promise.allSettled([saveArtifacts(report, root), saveArtifacts(report, root)]);
+    assert.equal(outcomes.filter(item => item.status === 'fulfilled').length, 1);
+    assert.equal(outcomes.filter(item => item.status === 'rejected').length, 1);
+    const saved = join(root, 'runs', report.run.id);
+    assert.equal(JSON.parse(await readFile(join(saved, 'manifest.json'), 'utf8')).run.id, report.run.id);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('artifact storage rejects writable ancestors before persisting payloads', async () => {
+  if (process.platform === 'win32') return; // POSIX mode bits do not describe Windows ACLs.
+  const root = await directory();
+  try {
+    const shared = join(root, 'shared');
+    await mkdir(shared); await chmod(shared, 0o777);
+    const report = await run(config, new FakeProvider(), { seed: 1, confirmRuns: 2, concurrency: 1, maxRequests: 100 });
+    await assert.rejects(saveArtifacts(report, join(shared, 'private')), /unsafe writes/i);
+    await assert.rejects(lstat(join(shared, 'private')));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('failed artifact publication leaves no completion manifest', async () => {
+  const root = await directory();
+  try {
+    const report = await run(config, new FakeProvider(), { seed: 1, confirmRuns: 2, concurrency: 1, maxRequests: 100 });
+    const first = report.cases[0]!.mutations[0]!.comparisons.decision!;
+    first.verdict = 'FAIL';
+    report.cases[0]!.baselineRequest = undefined;
+    await assert.rejects(saveArtifacts(report, root), /payloads required/i);
+    await assert.rejects(lstat(join(root, 'runs', report.run.id, 'manifest.json')));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('v2 private storage creates nested directories and a private file', async () => {
+  const root = await directory();
+  try {
+    const nested = await privateDir(join(root, 'v2', 'nested'));
+    await writePrivate(join(nested, 'evidence.json'), '{}');
+    assert.equal((await readFile(join(nested, 'evidence.json'), 'utf8')), '{}');
+    if (process.platform !== 'win32') {
+      assert.equal((await lstat(nested)).mode & 0o777, 0o700);
+      assert.equal((await lstat(join(nested, 'evidence.json'))).mode & 0o777, 0o600);
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test('importTrace extracts only validated Jev requests', async () => {
@@ -138,14 +234,16 @@ test('human confirmed failure identifies decisions, strategy and the actual repl
 });
 
 test('replay uses exact artifact requests, confirms position-sensitive failure, and preflights budget', async () => {
-  const mutated = structuredClone(request);
-  mutated.state = { trace: 'private', reordered: true };
+  const baseline = structuredClone(request);
+  baseline.state = { trace: 'private', reordered: true };
+  const mutated = structuredClone(baseline);
+  mutated.state = { reordered: true, trace: 'private' };
   const artifact: FailureArtifact = {
     version: 1, runId: 'r1', caseId: 'c1', questionId: 'decision', mutation: { type: 'object_key_order', strategy: 'reverse', seed: 2 }, idMap: { decision: 'decision' },
-    baselineRequest: request, mutatedRequest: mutated,
+    baselineRequest: baseline, mutatedRequest: mutated,
     baselineResponses: [], mutatedResponses: [], comparison: { verdict: 'FAIL', reason: 'FAIL_CHOICE_CHANGED', warnings: [], baseline: { type: 'choice', stable: true, runs: 2, modalChoice: 'yes', agreementRatio: 1 }, mutated: { type: 'choice', stable: true, runs: 3, modalChoice: 'no', agreementRatio: 1 }, thresholds: { noulBaselineRange: .1, scoreBaselineRange: .35, noulThreshold: .5, noulMinDelta: .15, scoreDelta: .5, jsDivergence: .15, confidenceDrop: .3, noulProbabilityShift: .2 }, reproduced: 3, observations: 3 }, model: 'jev-test', seed: 2, baselineRuns: 2, confirmRuns: 2,
   };
-  const provider = new FakeProvider(input => ({ model: 'jev-test', answers: { decision: input.state && typeof input.state === 'object' && 'reordered' in input.state ? { type: 'choice', choice: 'no', probabilities: { yes: .1, no: .9 }, confidence: .9 } : { type: 'choice', choice: 'yes', probabilities: { yes: .9, no: .1 }, confidence: .9 } }, usage: { input_tokens: 1, output_tokens: 1 } }));
+  const provider = new FakeProvider(input => ({ model: 'jev-test', answers: { decision: Object.keys(input.state)[0] === 'reordered' ? { type: 'choice', choice: 'no', probabilities: { yes: .1, no: .9 }, confidence: .9 } : { type: 'choice', choice: 'yes', probabilities: { yes: .9, no: .1 }, confidence: .9 } }, usage: { input_tokens: 1, output_tokens: 1 } }));
   const report = await replay(artifact, provider, { maxRequests: 20, concurrency: 1, seed: 9, baselineRuns: 3, confirmRuns: 3 });
   assert.equal(report.run.mode, 'replay');
   assert.equal(report.summary.fail, 1);

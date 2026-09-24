@@ -8,7 +8,7 @@ import { exitCode, options, plan, run, RunInterruptedError } from '../runner.ts'
 import { importTrace, loadFailure, renderText, replay, saveArtifacts } from '../artifacts.ts';
 import type { DecisionProvider, FuzzConfig, FuzzReport, RunOptions } from '../types.ts';
 import { assert, FuzzError } from '../util.ts';
-import { readJson } from '../storage.ts';
+import { hasSecrets, readJson } from '../storage.ts';
 import { mainV2 } from './v2.ts';
 import { TOOL_VERSION } from '../version.ts';
 
@@ -93,7 +93,7 @@ export async function main(argv: string[], supplied: Partial<CliIO> = {}): Promi
     }
     if (command === 'import') {
       assert(inputs.length === 1 && flags.out, 'import requires one JSONL file and --out');
-      const files = await importTrace(inputs[0]!, flags.out);
+      const files = await importTrace(inputs[0]!, flags.out, secrets);
       output({ files }, `Imported ${files.length} request(s). Historical responses are not an oracle.`); return 0;
     }
     assert(inputs.length > 0, 'input file required');
@@ -107,13 +107,15 @@ export async function main(argv: string[], supplied: Partial<CliIO> = {}): Promi
     if (command === 'replay') {
       assert(inputs.length === 1, 'replay requires one failure file');
       const artifact = await loadFailure(inputs[0]!);
-      result = await completedOrInterrupted(replay(artifact, createProvider(), opts));
+      assert(!hasSecrets(artifact, secrets), 'credential detected in replay input; refusing provider dispatch');
+      result = await completedOrInterrupted(replay(artifact, createProvider(), opts, secrets));
     } else {
       const paths = inputs.flatMap(path => /[*?\[]/.test(path) ? globSync(path).sort() : [path]);
       assert(paths.length > 0, 'no files matched');
       const loaded = await Promise.all(paths.map(loadConfig));
       const config: FuzzConfig = { version: 1, name: loaded.map(c => c.name).join(', '), cases: loaded.flatMap(c => c.cases) };
       assert(new Set(config.cases.map(c => c.id)).size === config.cases.length, 'duplicate case IDs across input files');
+      assert(!hasSecrets(config, secrets), 'credential detected in request input; refusing provider dispatch');
       const resolved = options(opts);
       const budget = plan(config, resolved);
       if (command === 'plan') {
@@ -122,10 +124,9 @@ export async function main(argv: string[], supplied: Partial<CliIO> = {}): Promi
       }
       if (!budget.withinBudget) throw new FuzzError('BUDGET', `request budget exceeded: planned worst case ${budget.worstCaseRequests}, --max-requests ${budget.configuredLimit}`);
       if (!flags.json && !flags.quiet) stderr(`seed: ${resolved.seed}; planned at most ${budget.worstCaseRequests} logical requests\n`);
-      result = await completedOrInterrupted(run(config, createProvider(), resolved));
+      result = await completedOrInterrupted(run(config, createProvider(), resolved, undefined, secrets));
     }
-    const serialized = JSON.stringify(result);
-    assert(!secrets.some(s => serialized.includes(s)), 'credential detected in result; refusing persistence');
+    assert(!hasSecrets(result, secrets), 'credential detected in result; refusing persistence');
     const dir = await saveArtifacts(result, flags['artifacts-dir'] ?? '.jevfuzz', !flags['no-save-payloads'], providerName);
     output(result, `${renderText(result, { directory: dir, savePayloads: !flags['no-save-payloads'], replayProvider: providerName })}\nartifacts: ${dir}${flags['no-save-payloads'] ? ' (hashes/summary only; replay unavailable)' : ''}`);
     if (result.run.status === 'incomplete') stderr(`ERROR ${result.run.error?.code ?? 'RUN_INTERRUPTED'}: run incomplete; partial artifacts: ${dir}\n`);

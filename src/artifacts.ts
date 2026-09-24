@@ -1,10 +1,10 @@
-import { open, lstat, mkdir, rename, rm } from 'node:fs/promises';
-import { join, parse, resolve } from 'node:path';
+import { open, lstat, mkdir } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import type { DecisionProvider, FailureArtifact, FuzzConfig, FuzzReport, Mutation, RunOptions } from './types.ts';
 import { parseConfig, thresholds, validateRequest } from './config.ts';
 import { run, RunInterruptedError } from './runner.ts';
 import { assert, FuzzError, hash, integer, record } from './util.ts';
-import { parseBoundedJson, readBoundedText, readJson } from './storage.ts';
+import { hasSecrets, parseBoundedJson, pathComponents, readBoundedText, readJson } from './storage.ts';
 
 async function status(path: string) {
   try { return await lstat(path); } catch (error: unknown) {
@@ -15,16 +15,20 @@ async function status(path: string) {
 
 /** Create each directory after refusing to traverse a symbolic link. */
 async function privateDirectory(path: string): Promise<string> {
-  const absolute = resolve(path), root = parse(absolute).root;
-  let current = root;
-  for (const part of absolute.slice(root.length).split('/').filter(Boolean)) {
-    current = join(current, part);
+  const absolute = resolve(path);
+  for (const current of pathComponents(absolute)) {
     const existing = await status(current);
     // macOS exposes its system temporary directory through /var -> /private/var.
     // Permit that fixed OS alias while refusing every caller-controlled link.
     if (existing?.isSymbolicLink() && current !== '/var') throw new FuzzError('CONFIG', `refusing symbolic-link directory: ${current}`);
     if (existing && !existing.isDirectory() && !(current === '/var' && existing.isSymbolicLink())) throw new FuzzError('CONFIG', `artifact directory is not a directory: ${current}`);
     if (!existing) await mkdir(current, { mode: 0o700 });
+    const directory = existing ?? await lstat(current);
+    if (process.platform !== 'win32' && directory.isDirectory()) {
+      const uid = process.getuid?.();
+      if (uid !== undefined && directory.uid !== uid && directory.uid !== 0) throw new FuzzError('CONFIG', `artifact directory has an untrusted owner: ${current}`);
+      if ((directory.mode & 0o022) !== 0 && (directory.mode & 0o1000) === 0) throw new FuzzError('CONFIG', `artifact directory permits unsafe writes: ${current}`);
+    }
     await (await open(current, 'r')).close(); // Verify that the directory remains accessible.
   }
   return absolute;
@@ -32,7 +36,7 @@ async function privateDirectory(path: string): Promise<string> {
 
 async function writePrivate(path: string, value: string): Promise<void> {
   const handle = await open(path, 'wx', 0o600);
-  try { await handle.writeFile(value, 'utf8'); await handle.chmod(0o600); } finally { await handle.close(); }
+  try { await handle.writeFile(value, 'utf8'); await handle.chmod(0o600); await handle.sync(); } finally { await handle.close(); }
 }
 
 function hashOnly(report: FuzzReport): unknown {
@@ -59,38 +63,36 @@ function failure(report: FuzzReport, c: FuzzReport['cases'][number], m: FuzzRepo
   };
 }
 
-/** Persist a settled run atomically under <directory>/runs/<run-id>. */
+/** Reserve a run directory exclusively and publish its completion manifest last. */
 export async function saveArtifacts(report: FuzzReport, directory: string, savePayloads = true, replayProvider?: 'typesafe' | 'cloudflare'): Promise<string> {
   assert(report.version === 1 && /^[A-Za-z0-9-]+$/.test(report.run.id), 'invalid report for artifact storage');
   const root = await privateDirectory(directory);
   const runs = await privateDirectory(join(root, 'runs'));
   const destination = join(runs, report.run.id);
-  const existing = await status(destination);
-  if (existing) throw new FuzzError('CONFIG', `artifact run already exists: ${destination}`);
-  const stage = await privateDirectory(join(runs, `.stage-${report.run.id}-${process.pid}-${Date.now()}`));
-  try {
-    const persisted = savePayloads ? report : hashOnly(report);
-    await writePrivate(join(stage, 'report.json'), `${JSON.stringify(persisted, null, 2)}\n`);
-    await writePrivate(join(stage, 'report.txt'), `${renderText(report, { directory: destination, savePayloads, replayProvider })}\n`);
-    const manifest = { version: 1, complete: report.run.status !== 'incomplete', replay: { available: savePayloads, reason: savePayloads ? undefined : 'REPLAY_UNAVAILABLE_NO_PAYLOADS' }, run: report.run, summary: report.summary };
-    await writePrivate(join(stage, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-    if (savePayloads) {
-      let sequence = 0;
-      for (const c of report.cases) for (const m of c.mutations) for (const [questionId, comparison] of Object.entries(m.comparisons)) {
-        if (comparison.verdict !== 'FAIL') continue;
-        if (sequence === 0) await privateDirectory(join(stage, 'failures'));
-        sequence++;
-        await writePrivate(join(stage, 'failures', `F${String(sequence).padStart(3, '0')}.json`), `${JSON.stringify(failure(report, c, m, questionId), null, 2)}\n`);
-      }
-    }
-    if (await status(destination)) throw new FuzzError('CONFIG', `artifact run already exists: ${destination}`);
-    await rename(stage, destination);
-    await (await open(destination, 'r')).close();
-    return destination;
-  } catch (error) {
-    await rm(stage, { recursive: true, force: true });
+  try { await mkdir(destination, { mode: 0o700 }); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new FuzzError('CONFIG', `artifact run already exists: ${destination}`);
     throw error;
   }
+  // A crash during persistence can leave this reserved directory without a
+  // complete manifest. Do not remove it on error: another writer may have
+  // touched the path, and cleanup must not delete data it does not own.
+  const persisted = savePayloads ? report : hashOnly(report);
+  await writePrivate(join(destination, 'report.json'), `${JSON.stringify(persisted, null, 2)}\n`);
+  await writePrivate(join(destination, 'report.txt'), `${renderText(report, { directory: destination, savePayloads, replayProvider })}\n`);
+  const manifest = { version: 1, complete: report.run.status !== 'incomplete', replay: { available: savePayloads, reason: savePayloads ? undefined : 'REPLAY_UNAVAILABLE_NO_PAYLOADS' }, run: report.run, summary: report.summary };
+  if (savePayloads) {
+    let sequence = 0;
+    for (const c of report.cases) for (const m of c.mutations) for (const [questionId, comparison] of Object.entries(m.comparisons)) {
+      if (comparison.verdict !== 'FAIL') continue;
+      if (sequence === 0) await privateDirectory(join(destination, 'failures'));
+      sequence++;
+      await writePrivate(join(destination, 'failures', `F${String(sequence).padStart(3, '0')}.json`), `${JSON.stringify(failure(report, c, m, questionId), null, 2)}\n`);
+    }
+  }
+  await writePrivate(join(destination, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  await (await open(destination, 'r')).close();
+  return destination;
 }
 
 function probabilities(label: string, values?: Record<string, number>): string {
@@ -179,8 +181,9 @@ export async function loadFailure(file: string): Promise<FailureArtifact> {
 }
 
 /** Replay a failure against the current provider; historical responses are never used. */
-export async function replay(rawArtifact: FailureArtifact, provider: DecisionProvider, input: Partial<RunOptions> = {}): Promise<FuzzReport> {
+export async function replay(rawArtifact: FailureArtifact, provider: DecisionProvider, input: Partial<RunOptions> = {}, secrets: readonly string[] = []): Promise<FuzzReport> {
   const artifact = validateArtifact(rawArtifact);
+  assert(!hasSecrets(artifact, secrets), 'credential detected in replay input; refusing provider dispatch');
   const invariants = Object.fromEntries(Object.keys(artifact.baselineRequest.questions).map(question => [question, question === artifact.questionId ? artifact.comparison.thresholds : {}]));
   const baselineRuns = input.baselineRuns ?? artifact.baselineRuns;
   const confirmRuns = input.confirmRuns ?? artifact.confirmRuns;
@@ -188,7 +191,7 @@ export async function replay(rawArtifact: FailureArtifact, provider: DecisionPro
   const config: FuzzConfig = { version: 1, name: `replay-${artifact.runId}`, cases: [{ id: artifact.caseId, request: artifact.baselineRequest, baselineRuns, mutations: { builtin: false, unorderedArrays: [], irrelevantFields: [], prosePaths: [] }, invariants }] };
   const prepared: Mutation[][] = [[{ recipe: artifact.mutation, request: artifact.mutatedRequest, idMap: artifact.idMap }]];
   try {
-    const report = await run(config, provider, { ...input, seed, baselineRuns, confirmRuns }, prepared);
+    const report = await run(config, provider, { ...input, seed, baselineRuns, confirmRuns }, prepared, secrets);
     report.run.mode = 'replay'; report.run.replayOf = artifact.runId;
     return report;
   } catch (error) {
@@ -198,7 +201,7 @@ export async function replay(rawArtifact: FailureArtifact, provider: DecisionPro
 }
 
 /** Import Jev Intent Review JSONL requests, discarding all historical responses. */
-export async function importTrace(file: string, outDir: string): Promise<string[]> {
+export async function importTrace(file: string, outDir: string, secrets: readonly string[] = []): Promise<string[]> {
   let lines: string[];
   try { lines = (await readBoundedText(file, 8 * 1024 * 1024)).split(/\r?\n/).filter(Boolean); } catch { throw new FuzzError('CONFIG', 'cannot read trace file'); }
   const configs: { id: string; config: FuzzConfig }[] = lines.map((line, index) => {
@@ -208,6 +211,7 @@ export async function importTrace(file: string, outDir: string): Promise<string[
     const id = `intent-review-${String(index + 1).padStart(4, '0')}`;
     return { id, config: parseConfig({ version: 1, name: id, cases: [{ id, request: trace.request }] }, `${id}.jevfuzz.json`) };
   });
+  assert(!hasSecrets(configs, secrets), 'credential detected in trace input; refusing import');
   const requestedOutput = resolve(outDir);
   const existingOutput = await status(requestedOutput);
   if (existingOutput?.isSymbolicLink()) throw new FuzzError('CONFIG', `refusing symbolic-link output directory: ${requestedOutput}`);

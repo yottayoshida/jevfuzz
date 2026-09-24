@@ -48,5 +48,20 @@ test('journal serializes writers and refuses interior corruption and secret pers
     await assert.rejects(privateJournal.append('observed', { text: 'private-sentinel' }), /credential detected/);
     await assert.rejects(privateJournal.close(), /credential detected/);
     assert.equal((await readFile(privateFile, 'utf8')).includes('private-sentinel'), false);
+    for (const [index, token] of ['secret"value', 'secret\\value'].entries()) {
+      const escapedFile = join(root, `escaped-${index}.jsonl`);
+      const escapedJournal = await ExecutionJournal.create(escapedFile, { secrets: [token] });
+      await assert.rejects(escapedJournal.append('observed', { model: token }), /credential detected/);
+      await assert.rejects(escapedJournal.close(), /credential detected/);
+      assert.equal((await readFile(escapedFile, 'utf8')).includes('secret'), false);
+    }
+    const nestedToken = 'secret"value';
+    let nestedValue = nestedToken;
+    for (let layer = 0; layer < 12; layer++) nestedValue = JSON.stringify(nestedValue);
+    const nestedFile = join(root, 'nested.jsonl');
+    const nestedJournal = await ExecutionJournal.create(nestedFile, { secrets: [nestedToken] });
+    await assert.rejects(nestedJournal.append('observed', { model: nestedValue }), /credential detected/);
+    await assert.rejects(nestedJournal.close(), /credential detected/);
+    assert.equal((await readFile(nestedFile, 'utf8')).includes('secret'), false);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

@@ -1,23 +1,34 @@
 import { thresholds } from './config.ts';
 import type { BaselineStats, Comparison, Invariant, JevAnswer, Thresholds } from './types.ts';
 import { FuzzError } from './util.ts';
+import { canonicalJson } from './storage.ts';
+import { finiteUnit, probabilities } from './answer-validation.ts';
 
 const EPSILON = 1e-12;
 
-function finite(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
+function validAnswer(answer: unknown): answer is JevAnswer {
+  if (answer === null || typeof answer !== 'object' || Array.isArray(answer)) return false;
+  const value = answer as Record<string, unknown>;
+  if (value.type === 'noul') return finiteUnit(value.noul);
+  if (value.type !== 'choice' && value.type !== 'score') return false;
+  if (!finiteUnit(value.confidence)) return false;
+  const distribution = probabilities(value.probabilities);
+  if (distribution === null) return false;
+  if (value.type === 'choice') return typeof value.choice === 'string' && Object.hasOwn(distribution, value.choice);
+  const keys = Object.keys(distribution);
+  return keys.length >= 2 && keys.length <= 10 && keys.every((key, index) => key === String(index))
+    && typeof value.score === 'number' && Number.isFinite(value.score) && value.score >= 0 && value.score <= keys.length - 1
+    && value.legend !== null && typeof value.legend === 'object' && !Array.isArray(value.legend);
 }
 
-function validAnswer(answer: JevAnswer): boolean {
-  if (answer.type === 'noul') return finite(answer.noul);
-  return finite(answer.confidence) && Object.values(answer.probabilities).every(finite);
-}
-
-function requireAnswers(answers: JevAnswer[], minimum: number): JevAnswer['type'] {
-  if (answers.length < minimum || !answers.every(validAnswer)) throw new FuzzError('CONFIG', 'comparison requires valid answers');
-  const type = answers[0]?.type;
-  if (!type || !answers.every(answer => answer.type === type)) throw new FuzzError('CONFIG', 'comparison answers must have one type');
-  return type;
+function requireAnswers(answers: JevAnswer[], minimum: number): JevAnswer[] {
+  let clean: unknown;
+  try { clean = canonicalJson(answers); } catch { throw new FuzzError('CONFIG', 'comparison requires valid answers'); }
+  if (!Array.isArray(clean) || clean.length < minimum || !clean.every(validAnswer)) throw new FuzzError('CONFIG', 'comparison requires valid answers');
+  const typed = clean as JevAnswer[];
+  const type = typed[0]!.type;
+  if (!typed.every(answer => answer.type === type)) throw new FuzzError('CONFIG', 'comparison answers must have one type');
+  return typed;
 }
 
 function probabilityStats(answers: Extract<JevAnswer, { probabilities: Record<string, number> }>[]): Pick<BaselineStats, 'meanProbabilities' | 'minProbabilities' | 'maxProbabilities'> {
@@ -36,7 +47,8 @@ function probabilityStats(answers: Extract<JevAnswer, { probabilities: Record<st
 
 /** Summarize one typed answer population using the configured stability bounds. */
 export function summarize(answers: JevAnswer[], invariant: Invariant = {}): BaselineStats {
-  const type = requireAnswers(answers, 1);
+  answers = requireAnswers(answers, 1);
+  const type = answers[0]!.type;
   const limits = thresholds(invariant);
   if (type === 'choice') {
     const choices = answers as Extract<JevAnswer, { type: 'choice' }>[];
@@ -123,8 +135,9 @@ function softResult(baseline: BaselineStats, mutated: BaselineStats, limits: Thr
 
 /** Compare a stable baseline with a mutation; confirmed calls contain the original result plus reruns. */
 export function compare(baselineAnswers: JevAnswer[], mutatedAnswers: JevAnswer[], invariant: Invariant = {}, confirmed = false): Comparison {
-  const type = requireAnswers(baselineAnswers, 2);
-  requireAnswers(mutatedAnswers, 1);
+  baselineAnswers = requireAnswers(baselineAnswers, 2);
+  mutatedAnswers = requireAnswers(mutatedAnswers, 1);
+  const type = baselineAnswers[0]!.type;
   if (!mutatedAnswers.every(answer => answer.type === type)) throw new FuzzError('CONFIG', 'baseline and mutation answer types must match');
   const limits = thresholds(invariant);
   const baseline = summarize(baselineAnswers, invariant);
@@ -153,9 +166,9 @@ export function compare(baselineAnswers: JevAnswer[], mutatedAnswers: JevAnswer[
     if (reproduced) {
       return { ...base, verdict: 'FAIL', reason: reproduced.failure.reason, warnings: [], reproduced: reproduced.matches, delta: reproduced.failure.delta };
     }
-    if (firstFailure) {
-      const matches = counts.get(firstFailure.signature)!.matches;
-      return { ...base, verdict: 'WARN', reason: 'WARN_FLAKY_MUTATION', warnings: ['WARN_FLAKY_MUTATION'], reproduced: matches, delta: firstFailure.delta };
+    const flaky = [...counts.values()].sort((a, b) => b.matches - a.matches || a.failure.signature.localeCompare(b.failure.signature))[0];
+    if (flaky) {
+      return { ...base, verdict: 'WARN', reason: 'WARN_FLAKY_MUTATION', warnings: ['WARN_FLAKY_MUTATION'], reproduced: flaky.matches, delta: flaky.failure.delta };
     }
   }
   const soft = softResult(baseline, mutated, limits);

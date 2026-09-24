@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { DecisionProvider, EvaluateOptions, JevAnswer, JevRequest, JevResponse, ProviderCapabilities } from './types.ts';
 import { FuzzError, record, rng } from './util.ts';
+import { validateRequest } from './config.ts';
+import { canonicalJson, hasSecrets, parseBoundedJson } from './storage.ts';
+import { finiteUnit, probabilities } from './answer-validation.ts';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 const DEFAULT_TYPESAFE_HOST = 'https://api.typesafe.ai';
@@ -39,27 +42,6 @@ function missingModelError(): FuzzError {
   return providerError('PROVIDER_RESPONSE', 'provider response is missing the actual model version');
 }
 
-function finiteUnit(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
-}
-
-function probabilities(value: unknown, expectedKeys?: readonly string[]): Record<string, number> | null {
-  if (!record(value)) return null;
-  const keys = Object.keys(value);
-  if (expectedKeys && (keys.length !== expectedKeys.length || expectedKeys.some((key) => !Object.hasOwn(value, key)))) return null;
-  let total = 0;
-  for (const entry of Object.values(value)) {
-    if (!finiteUnit(entry)) return null;
-    total += entry;
-  }
-  // Live Jev 1.13.0 returns probabilities rounded to two decimal places.
-  // Their sum can be 0.99 or 1.01. Accept only the implied rounding interval;
-  // retain every raw value rather than rewriting the provider's distribution.
-  const rounded = Object.values(value).every(entry => Math.abs((entry as number) * 100 - Math.round((entry as number) * 100)) < 1e-9);
-  const tolerance = rounded ? keys.length * 0.005 + 1e-9 : 0.000_001;
-  return total > 0 && Math.abs(total - 1) <= tolerance ? value as Record<string, number> : null;
-}
-
 function validAnswer(value: unknown, question: JevRequest['questions'][string]): value is JevAnswer {
   if (!record(value) || value.type !== question.type) return false;
   if (question.type === 'noul') return finiteUnit(value.noul);
@@ -77,6 +59,14 @@ function validAnswer(value: unknown, question: JevRequest['questions'][string]):
 
 /** Validates the complete Jev response against both the public response schema and its request. */
 export function validateResponse(raw: unknown, request: JevRequest): JevResponse {
+  try { request = validateRequest(request); } catch { throw providerError('PROVIDER_REQUEST', 'invalid provider request'); }
+  let isRecord = false;
+  try { isRecord = record(raw); } catch { throw responseError(); }
+  if (!isRecord) throw responseError();
+  let observedModel: unknown;
+  try { observedModel = Object.getOwnPropertyDescriptor(raw as object, 'model')?.value; } catch { throw responseError(); }
+  if (typeof observedModel !== 'string' || observedModel.trim() === '') throw missingModelError();
+  try { raw = canonicalJson(raw); } catch { throw responseError(); }
   if (!record(raw)) throw responseError();
   if (typeof raw.model !== 'string' || raw.model.trim() === '') throw missingModelError();
   if (!record(raw.answers) || !record(raw.usage)) throw responseError();
@@ -250,6 +240,13 @@ abstract class HttpProvider implements DecisionProvider {
   protected observedCache(_response: Response): 'unknown' | 'cached' { return 'unknown'; }
 
   async evaluate(request: JevRequest, options: EvaluateOptions = {}): Promise<JevResponse> {
+    try {
+      request = validateRequest(request);
+      if (options.payload !== undefined) {
+        const supplied = validateRequest(parseBoundedJson(options.payload));
+        if (JSON.stringify(supplied) !== JSON.stringify(request)) throw responseError();
+      }
+    } catch { throw providerError('PROVIDER_REQUEST', 'invalid provider request'); }
     const payload = this.serialize(request, options.payload);
     for (let attempt = 1; attempt <= this.#maxAttempts; attempt++) {
       if (options.signal?.aborted) throw abortError(options.signal);
@@ -284,7 +281,7 @@ abstract class HttpProvider implements DecisionProvider {
           throw responseError();
         }
         const normalized = validateResponse(this.unpack(raw), request);
-        if (JSON.stringify(normalized).includes(this.#token)) throw providerError('PROVIDER_RESPONSE', 'provider response contains a credential');
+        if (hasSecrets(normalized, [this.#token])) throw providerError('PROVIDER_RESPONSE', 'provider response contains a credential');
         await settle('known'); try { await options.observedMetadata?.({ cache: this.observedCache(response) }); } catch (error) { throw hookError(error, 'PERSISTENCE_ERROR'); }
         return normalized;
       } catch (error) {
@@ -336,7 +333,7 @@ function cloudflareResult(raw: unknown): unknown {
 /** Minimal Workers AI adapter, kept separate because its wire format is not TypeSafe System One's. */
 export class CloudflareProvider extends HttpProvider {
   constructor(env: Environment = process.env, options: ProviderOptions = {}) { super(cloudflareUrl(env), tokenValue(env, 'CLOUDFLARE_API_TOKEN'), options); }
-  protected requestHeaders(): Record<string, string> { return { ...super.requestHeaders(), 'cf-aig-skip-cache': 'true' }; }
+  protected requestHeaders(): Record<string, string> { return { ...super.requestHeaders(), 'cf-aig-skip-cache': 'true', 'cf-aig-max-attempts': '1' }; }
   protected observedCache(response: Response): 'unknown' | 'cached' {
     return response.headers.get('cf-aig-cache-status')?.trim().toUpperCase() === 'HIT' ? 'cached' : 'unknown';
   }
@@ -372,5 +369,10 @@ export class FakeProvider implements DecisionProvider {
   #index = 0;
   readonly #handler: (request: JevRequest, index: number) => JevResponse;
   constructor(handler: (request: JevRequest, index: number) => JevResponse = defaultResponse) { this.#handler = handler; }
-  async evaluate(request: JevRequest, options: EvaluateOptions = {}): Promise<JevResponse> { options.signal?.throwIfAborted(); const result = validateResponse(this.#handler(request, this.#index++), request); await options.observedMetadata?.({ cache: 'fresh' }); return result; }
+  async evaluate(request: JevRequest, options: EvaluateOptions = {}): Promise<JevResponse> {
+    options.signal?.throwIfAborted();
+    try { request = validateRequest(request); } catch { throw providerError('PROVIDER_REQUEST', 'invalid provider request'); }
+    const result = validateResponse(this.#handler(request, this.#index++), request);
+    await options.observedMetadata?.({ cache: 'fresh' }); return result;
+  }
 }

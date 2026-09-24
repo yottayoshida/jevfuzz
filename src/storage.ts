@@ -1,9 +1,10 @@
 import { constants } from 'node:fs';
 import { lstat, mkdir, open, readFile, readdir, rename, rm } from 'node:fs/promises';
-import { dirname, join, parse, resolve } from 'node:path';
+import { dirname, join, parse, resolve, sep } from 'node:path';
 import { hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { assert, FuzzError } from './util.ts';
+import type { Json } from './types.ts';
 
 export const MAX_JSON_BYTES = 8 * 1024 * 1024;
 export const MAX_JSON_DEPTH = 64;
@@ -37,19 +38,59 @@ export class StorageQuota {
   }
 }
 
-export function boundedJson(value: unknown, maxDepth = MAX_JSON_DEPTH, maxNodes = 100_000): void {
-  const pending: [unknown, number][] = [[value, 0]];
+function safeReflection<T>(read: () => T): T {
+  try { return read(); } catch { throw new FuzzError('CONFIG', 'invalid JSON object'); }
+}
+export function canonicalJson(value: unknown, maxDepth = MAX_JSON_DEPTH, maxNodes = 100_000): Json {
+  const pending: { node: unknown; depth: number; parent?: Record<string, Json> | Json[]; key?: string | number }[] = [{ node: value, depth: 0 }];
   const seen = new Set<object>();
   let count = 0;
+  let root: Json = null;
   while (pending.length) {
-    const [node, depth] = pending.pop()!;
+    const { node, depth, parent, key } = pending.pop()!;
     assert(++count <= maxNodes && depth <= maxDepth, 'JSON structural limit exceeded');
+    let copy: Json;
     if (node && typeof node === 'object') {
       assert(!seen.has(node), 'JSON must not contain cycles or shared object references');
       seen.add(node);
-      for (const child of Object.values(node)) pending.push([child, depth + 1]);
-    } else assert(node === null || typeof node === 'string' || typeof node === 'boolean' || (typeof node === 'number' && Number.isFinite(node)), 'invalid JSON value');
+      const array = safeReflection(() => Array.isArray(node));
+      const prototype = safeReflection(() => Object.getPrototypeOf(node));
+      assert(prototype === (array ? Array.prototype : Object.prototype) || (!array && prototype === null), 'invalid JSON object');
+      const ownKeys = safeReflection(() => Reflect.ownKeys(node));
+      assert(ownKeys.length <= maxNodes, 'JSON structural limit exceeded');
+      if (array) {
+        const length = safeReflection(() => Object.getOwnPropertyDescriptor(node, 'length')?.value);
+        assert(Number.isSafeInteger(length) && length <= maxNodes - count && ownKeys.length === length + 1, 'JSON structural limit exceeded');
+        const result: Json[] = new Array(length);
+        copy = result;
+        for (let index = length - 1; index >= 0; index--) {
+          const descriptor = safeReflection(() => Object.getOwnPropertyDescriptor(node, String(index)));
+          assert(descriptor && Object.hasOwn(descriptor, 'value') && descriptor.enumerable, 'invalid JSON array');
+          pending.push({ node: descriptor.value, depth: depth + 1, parent: result, key: index });
+        }
+      } else {
+        const result: Record<string, Json> = prototype === null ? Object.create(null) : {};
+        copy = result;
+        for (let index = ownKeys.length - 1; index >= 0; index--) {
+          const name = ownKeys[index];
+          assert(typeof name === 'string', 'invalid JSON object');
+          const descriptor = safeReflection(() => Object.getOwnPropertyDescriptor(node, name));
+          assert(descriptor && Object.hasOwn(descriptor, 'value') && descriptor.enumerable, 'invalid JSON object');
+          pending.push({ node: descriptor.value, depth: depth + 1, parent: result, key: name });
+        }
+      }
+    } else {
+      assert(node === null || typeof node === 'string' || typeof node === 'boolean' || (typeof node === 'number' && Number.isFinite(node)), 'invalid JSON value');
+      copy = node as Json;
+    }
+    if (parent === undefined) root = copy;
+    else if (Array.isArray(parent)) parent[key as number] = copy;
+    else Object.defineProperty(parent, key as string, { value: copy, enumerable: true, writable: true, configurable: true });
   }
+  return root;
+}
+export function boundedJson(value: unknown, maxDepth = MAX_JSON_DEPTH, maxNodes = 100_000): void {
+  canonicalJson(value, maxDepth, maxNodes);
 }
 export function parseBoundedJson(text: string, maxBytes = MAX_JSON_BYTES): unknown {
   assert(Buffer.byteLength(text) <= maxBytes, 'JSON byte limit exceeded');
@@ -58,9 +99,37 @@ export function parseBoundedJson(text: string, maxBytes = MAX_JSON_BYTES): unkno
   boundedJson(value);
   return value;
 }
-export function assertNoSecrets(text: string, secrets: readonly string[] = []): void {
-  const known = secrets.flatMap(value => [value, value.trim()]).filter(Boolean);
-  assert(!known.some(secret => text.includes(secret)), 'credential detected; refusing persistence');
+/** Check both semantic strings and their JSON encodings, including nested JSON strings. */
+export function hasSecrets(value: unknown, secrets: readonly string[] = []): boolean {
+  const known = [...new Set(secrets.flatMap(secret => [secret, secret.trim()]).filter(Boolean))];
+  if (!known.length) return false;
+  const matches = (text: string): boolean => known.some(secret => {
+    let encoded = secret;
+    while (encoded.length <= text.length) {
+      if (text.includes(encoded)) return true;
+      const next = JSON.stringify(encoded).slice(1, -1);
+      if (next.length <= encoded.length) return false;
+      encoded = next;
+    }
+    return false;
+  });
+  const pending: unknown[] = [value];
+  const seen = new Set<object>();
+  while (pending.length) {
+    const node = pending.pop();
+    if (typeof node === 'string') { if (matches(node)) return true; }
+    else if (node && typeof node === 'object' && !seen.has(node)) {
+      seen.add(node);
+      for (const [key, child] of Object.entries(node)) {
+        if (matches(key)) return true;
+        pending.push(child);
+      }
+    }
+  }
+  return false;
+}
+export function assertNoSecrets(value: unknown, secrets: readonly string[] = []): void {
+  assert(!hasSecrets(value, secrets), 'credential detected; refusing persistence');
 }
 
 /** Fixed macOS aliases are resolved before validating caller-controlled components. */
@@ -71,11 +140,16 @@ export function storagePath(path: string): string {
   }
   return absolute;
 }
+type PathOperations = { parse(path: string): { root: string }; join(...parts: string[]): string; sep: string };
+/** Full prefixes used when checking each directory component before I/O. */
+export function pathComponents(absolute: string, paths: PathOperations = { parse, join, sep }): string[] {
+  const root = paths.parse(absolute).root;
+  let current = root;
+  return absolute.slice(root.length).split(paths.sep).filter(Boolean).map(name => (current = paths.join(current, name)));
+}
 export async function assertSafePath(path: string): Promise<string> {
-  const absolute = storagePath(path), root = parse(absolute).root;
-  let part = root;
-  for (const name of absolute.slice(root.length).split('/').filter(Boolean)) {
-    part = join(part, name);
+  const absolute = storagePath(path);
+  for (const part of pathComponents(absolute)) {
     try { assert(!(await lstat(part)).isSymbolicLink(), 'symbolic links are not permitted'); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   }
@@ -108,10 +182,14 @@ export async function privateDir(path: string): Promise<string> {
   await assertSafePath(safe);
   const stat = await lstat(safe);
   assert(stat.isDirectory() && (!process.getuid || stat.uid === process.getuid()), 'storage directory must be owned by the current user');
-  assert((stat.mode & 0o077) === 0, 'storage directory must have mode 0700');
+  // Windows reports synthesized POSIX mode bits; ACLs govern access there.
+  if (process.platform !== 'win32') assert((stat.mode & 0o077) === 0, 'storage directory must have mode 0700');
   return safe;
 }
 export async function syncDirectory(path: string): Promise<void> {
+  // Windows does not permit fsync on a directory handle. File contents are
+  // synced before this call; directory-entry durability follows the OS.
+  if (process.platform === 'win32') return;
   const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
   try { await handle.sync(); } finally { await handle.close(); }
 }

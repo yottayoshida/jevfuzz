@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-      - uses: yottayoshida/jevfuzz@2b29d83f99814dc95644646b7721f5d12dd25695
+      - uses: yottayoshida/jevfuzz@b9519beaa9a91e64890cefe3bf0c49c93eb3ed30
         with:
           command: plan
           target: .jevfuzz/campaign.json
@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-      - uses: yottayoshida/jevfuzz@2b29d83f99814dc95644646b7721f5d12dd25695
+      - uses: yottayoshida/jevfuzz@b9519beaa9a91e64890cefe3bf0c49c93eb3ed30
         id: jevfuzz
         with:
           command: fuzz
