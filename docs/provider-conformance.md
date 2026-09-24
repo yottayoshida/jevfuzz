@@ -103,6 +103,17 @@ observation metadata, not freshness or origin-independence evidence:
 `cacheMetadata` remains false for both HTTP adapters and `fixed-stat-v1` remains
 refused.
 
+The current branch was rechecked against live Cloudflare on 2026-09-24 with
+`JEVFUZZ_LIVE_PROVIDER=cloudflare node --env-file=<private-env> scripts/live-smoke.ts`
+at commit `928ff41`. The public synthetic fixture produced six passing
+comparisons, six logical requests, six client HTTP attempts, and zero client
+retries; the observed model was `jev-1.13.0`. The provider source SHA-256 was
+`3cc58369e97cd3d070f430ddab1e27ec54c8d3d35da7e9b7c131dd6e0fe22d41`.
+The private run artifact is ignored by Git. This shows the endpoint accepted
+the current adapter requests; it does not establish that the gateway honored
+the retry header, that the origin performed six fresh independent inferences,
+or that fixed-stat confirmation is available.
+
 The header is documented for the existing endpoint in Cloudflare's
 [REST API](https://developers.cloudflare.com/ai-gateway/usage/rest-api/) and
 [caching](https://developers.cloudflare.com/ai-gateway/features/caching/)
